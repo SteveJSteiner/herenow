@@ -31,3 +31,4 @@ Format:
 2026-03-21 | GT0 | done | - | Delivery mechanism closed: GitHub template scaffold retained visibly as provenance, while membrane branches are created post-init as a separate common-root governed lineage.
 2026-03-21 | GT1 | handoff | - | Active continuation set to canonical skeleton and document contracts: freeze initialized branch/layout naming, planning-file placement, and provenance representation before implementation work begins.
 2026-03-21 | GT1 | done | - | Canonical skeleton settled: D3-LAYOUT closed, D24 branch naming, D25 initialized set (now+meta+provenance/scaffold), D26 provenance invariants, D27 planning files in plan/ on now. Continuation advanced to GT2.
+2026-03-21 | GT2 | done | - | Initializer UX settled: D28 init/bootstrap split, D29 provenance preservation (purely additive), D30 marker-based idempotence (refs/membrane/root), D31 local-only scope. Continuation advanced to GT3.

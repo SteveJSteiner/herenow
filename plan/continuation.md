@@ -12,79 +12,105 @@
 
 ## Task Identity
 
-- **Node ID:** GT2
-- **Title:** Initializer UX and idempotence contract
+- **Node ID:** GT3
+- **Title:** Create common-root membrane topology in a generated repo
 - **Status:** ACTIVE
 
 ## Why now
 
-GT1 is closed: the canonical initialized layout, branch naming (D24), initialized branch set (D25), provenance invariants (D26), now-branch skeleton (D3-LAYOUT closed), and planning-file placement (D27) are all settled. GT3 (topology creation) depends on both GT1 and GT2, so GT2 is now the sole blocker on the critical path to the first implementation node. Without a settled init entry point and recovery model, GT3 cannot implement without making hidden product decisions about command interface, failure modes, and re-runnability.
+GT1 and GT2 are both closed. GT1 settled the canonical skeleton, branch naming (D24), initialized branch set (D25), provenance invariants (D26), and planning-file placement (D27). GT2 settled the initializer command contract (D28), provenance preservation (D29), marker-based idempotence (D30), and local-only scope boundary (D31). GT3 is now unblocked and is the sole entry point to the implementation spine — GT5, GT6, and GT12 all depend on GT3.
 
 ## Dependencies
 
-- `requirements.md` (R17 bootstrapping, R19 template sovereignty)
-- `decisions.md` (D22 single bootstrap entry point, D23 submodule init strategy still open, D25 initialized branch set)
-- `roadmap.md` (GT2 node definition)
-- GT1 outputs: canonical skeleton, branch naming, planning-file placement are now settled constraints that GT2 must respect
+- `decisions.md` §7 (D28–D31: init command contract, provenance, idempotence, scope)
+- `decisions.md` §1.4–1.5 (D24–D26: branch naming, initialized set, provenance invariants)
+- `decisions.md` §2.3–2.4 (D3-LAYOUT, D27: now-branch skeleton, planning files)
+- `roadmap.md` (GT3 node definition and acceptance criteria)
 
 ## Output Files
 
-- `decisions.md` (init command contract, idempotence/recovery semantics, failure-mode decisions)
-- `roadmap.md` (only if GT2 changes downstream chunk boundaries or dependencies)
-- `continuation.md` (refresh state while GT2 remains active)
+- `init.sh` (the initializer script, living on the pre-init scaffold branch)
+- `decisions.md` (only if implementation reveals a design gap requiring a new decision)
+- `roadmap.md` (only if GT3 changes downstream boundaries)
+- `continuation.md` (refresh state while GT3 remains active)
 
 ## Local Context
 
-- The roadmap already lists GT2's questions to resolve:
-  - `./init.sh`, `just init`, `cargo run -p ...`, or other entry point?
-  - May init rewrite local history?
-  - What happens if init partially succeeds?
-  - Is re-running init supported?
-- D22 commits to a single bootstrap entry point with recovery semantics, but GT2 is about the *initializer* (creates the topology), not the *bootstrapper* (activates enforcement on an already-initialized repo). These are distinct steps: init creates branches, bootstrap configures hooks.
-- D25 says init creates `now`, `meta`, and `provenance/scaffold`. Init must move the pre-existing template branch to `provenance/scaffold` and create the membrane branches from a fresh common root.
-- The repo is currently a GitHub template scaffold — init transforms it into a membrane topology. The init command lives in the pre-init scaffold and is consumed once.
+- GT3 is a C (implementation) node. The design decisions are settled; this is about writing `init.sh`.
+- The eight initialization steps from §7.4 are the implementation contract:
+  1. Create root ref (`refs/membrane/root`)
+  2. Record provenance (`provenance/scaffold`)
+  3. Create `now` from root
+  4. Create `meta` from root
+  5. Seed `now` (canonical skeleton)
+  6. Seed `meta` (minimal content)
+  7. Seed planning files (`plan/` on `now`)
+  8. Checkout `now`
+- Each step must be independently guarded for idempotence per D30.
+- Init is purely additive per D29 — it never modifies or deletes existing refs.
+- The init script is POSIX shell, non-interactive, meaningful exit codes per D28.
+- `refs/membrane/root` is the primary initialization marker per D30.
+- The now-branch skeleton layout is defined in D3-LAYOUT §2.3.
+- Planning files are defined in D27 §2.4 — five files with protocol headers.
+- Initial `.gitmodules` declares only the `meta` submodule per D25.
 
 ## Scope Boundary
 
 In scope:
-- decide the user-facing init command name and invocation
-- decide whether init may rewrite local history (force-push, rebase, etc.)
-- decide partial-success semantics: is the repo left in a recoverable state? how?
-- decide re-run semantics: idempotent, error, or conditional?
-- decide the relationship between init and bootstrap (are they one step or two?)
-- record the CLI contract in `decisions.md`
+- implement `init.sh` following the eight-step contract
+- create the empty common root commit and store it as `refs/membrane/root`
+- create `now`, `meta`, and `provenance/scaffold` branches
+- seed `now` with the canonical skeleton (`.now/hooks/`, `bootstrap.sh`, `.gitmodules`, `.gitignore`)
+- seed `meta` with minimal initial content
+- seed `plan/` with the five planning files and protocol headers
+- implement step-level idempotence guards
+- implement re-run detection (already-initialized → no-op exit 0)
 
 Out of scope:
-- implementing the init command (that is GT3)
-- implementing bootstrap.sh (that is GT6)
+- implementing `bootstrap.sh` (GT6)
+- implementing enforcement logic or hook content beyond stub launchers (GT7+)
+- resolving D6-PATHS (submodule path policy — GT4)
 - resolving D18 (enforcement source placement) or D19 (source language)
-- resolving D6-PATHS (submodule path policy) — that is GT4
-- defining `.gitmodules` schema — that is GT4
+- any hosted platform configuration (D31)
 
 ## Success Condition
 
-- a clear CLI contract exists for the init command: name, arguments, preconditions, postconditions
-- idempotence/recovery model is explicit: what happens on re-run, partial failure, and success
-- the distinction between init (topology creation) and bootstrap (enforcement activation) is clear
-- GT3 can implement the initializer without making hidden product decisions
+- A fresh repo created from the template can be initialized with `./init.sh` into the canonical branch topology.
+- `git merge-base` across any pair of membrane branches (`now`, `meta`) resolves to the common root at `refs/membrane/root`.
+- `provenance/scaffold` shares no commit ancestry with membrane branches.
+- Re-running `./init.sh` on an already-initialized repo prints a no-op message and exits 0.
+- Partial failure at any step can be recovered by re-running `./init.sh`.
+- The now branch carries the canonical skeleton layout per D3-LAYOUT.
+- The five planning files exist in `plan/` with protocol headers per D27.
 
 ## Stress Test
 
-- partial-failure case: init creates the common root and `now` but fails before creating `meta` — what state is the repo in? can the operator recover?
-- re-run case: init succeeds, operator runs init again — does it error, no-op, or destructively recreate?
-- pre-existing work case: operator has made commits on the template's default branch before running init — does init preserve, warn, or refuse?
-- agent case: a coding agent runs init non-interactively — does the contract support non-interactive execution?
+- Run init on a repo with no pre-init commits (bare template clone) — does it succeed?
+- Run init on a repo with extra pre-init commits — does `provenance/scaffold` include them?
+- Kill init after step 3 (branches created, not yet seeded) — does re-run complete cleanly?
+- Run init twice in succession — does the second invocation no-op exit 0?
+- Run init when a branch named `now` already exists but does NOT descend from a membrane root — does init correctly identify this as uninitialized?
+- Verify `git merge-base now meta` resolves to the commit at `refs/membrane/root`.
+- Verify `git merge-base --is-ancestor` fails between `provenance/scaffold` and `now`.
 
 ## Audit Target
 
-Audit these claims after GT2 lands:
-- the init CLI contract is stated once in design authority, not split across roadmap and implementation
-- the idempotence model is explicit enough that GT3 can implement detection of "already initialized" state
-- no enforcement or schema decisions leaked into the init contract (those belong to GT4, GT6, GT7)
-- the init/bootstrap distinction is clear and does not create a hidden dependency or ordering confusion
+Audit these claims after GT3 lands:
+- the eight steps from §7.4 are implemented in order, each with an idempotence guard
+- `refs/membrane/root` is created and used as the sole initialization marker
+- the init script is purely additive — no existing refs are modified or deleted (D29)
+- the now-branch skeleton matches D3-LAYOUT §2.3
+- the planning files match D27 §2.4 protocol headers
+- the init script is POSIX shell, non-interactive, exits 0 on success/already-initialized and non-zero on failure (D28)
+- no enforcement logic or bootstrap activation leaked into init (those belong to GT6, GT7+)
 
 ## Verification
 
-- `rg -n "GT2|init|idempoten|recovery|bootstrap|partial" roadmap.md decisions.md`
-- manual check that `decisions.md` contains the init CLI contract and recovery semantics
-- manual check that the init/bootstrap boundary is clear and non-overlapping
+- `git rev-parse refs/membrane/root` — the root ref exists
+- `git merge-base now meta` equals `refs/membrane/root`
+- `git merge-base --is-ancestor provenance/scaffold now` — fails (disjoint ancestry)
+- `git log --oneline now -- .now/hooks/` — hook stubs exist
+- `git log --oneline now -- bootstrap.sh` — bootstrap.sh exists
+- `git log --oneline now -- .gitmodules` — meta submodule declared
+- `git log --oneline now -- plan/` — five planning files exist
+- `./init.sh && echo $?` on already-initialized repo — prints 0

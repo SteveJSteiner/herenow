@@ -126,7 +126,7 @@ GT15 -> GT16
 - **Scope:**
   - create empty common root commit
   - create `now`, `meta`, and `provenance/scaffold` branches (per D25: past and future branches are not created at init)
-  - rename/move the pre-init template branch to `provenance/scaffold` (per D26: disjoint ancestry from membrane branches)
+  - create `provenance/scaffold` as a new ref pointing at the pre-init scaffold tip (per D26: disjoint ancestry; per D29: purely additive, original branch left intact)
   - place the canonical now-branch skeleton (per D3-LAYOUT) and minimal meta content on their respective branches
   - initial `.gitmodules` declares only the `meta` submodule
 - **Acceptance:**
@@ -289,6 +289,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT2 — Initializer UX and idempotence contract**
+**GT3 — Create common-root membrane topology in a generated repo**
 
-GT1 is resolved: the canonical initialized layout, branch naming, planning-file placement, and provenance invariants are settled in `decisions.md` (D3-LAYOUT, D24–D27). The next live boundary is to specify the user-facing init entry point, its idempotence/recovery model, and failure semantics so GT3 can implement without hidden product decisions.
+GT2 is resolved: the initializer command contract (D28), provenance preservation policy (D29), marker-based idempotence model (D30), and local-only scope boundary (D31) are settled in `decisions.md` §7. GT1 was already resolved (D3-LAYOUT, D24–D27). GT3 can now implement the initializer against the specified eight-step contract without hidden product decisions.

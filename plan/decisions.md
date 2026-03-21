@@ -78,7 +78,7 @@ The design intentionally prefers git-native inspectability and ancestry-grounded
 
 The system is a single git repository. All temporal structure is expressed through branches, submodules, and hooks — not through multiple repositories, external coordination, or platform features.
 
-The central claim is that git's content-addressed store, ref system, and hook mechanism are sufficient to express and enforce a non-trivial temporal organization. This claim is untested at scale and may prove wrong in specific areas (see §8, areas of genuine uncertainty), but it is the design premise.
+The central claim is that git's content-addressed store, ref system, and hook mechanism are sufficient to express and enforce a non-trivial temporal organization. This claim is untested at scale and may prove wrong in specific areas (see §9, areas of genuine uncertainty), but it is the design premise.
 
 ### 1.2 Common origin
 
@@ -394,7 +394,86 @@ The temporal gap between the past worktree's HEAD and the now branch's past-pin 
 
 ---
 
-## 7. Bootstrapping
+## 7. Initialization
+
+Initialization transforms a repository generated from the GitHub template into the membrane branch topology. It is a one-time local operation, distinct from bootstrapping (§8), which activates enforcement on an already-initialized repository.
+
+### 7.1 Initializer command
+
+The initializer is `./init.sh`, a POSIX shell script at the repository root. It lives on the pre-init scaffold branch and is consumed once: after initialization, it exists on `provenance/scaffold` but not on `now`.
+
+The normal invocation takes no arguments. The interface reserves `--help` and `--dry-run` for future use without requiring their implementation in the first version.
+
+The initializer is non-interactive: no prompts, deterministic behavior, meaningful exit codes (0 for success or already-initialized, non-zero for failure). This supports both human operators and coding agents running init programmatically.
+
+**Decision [D28 — CLOSED]:** Initializer/bootstrap lifecycle split. Initialization (`./init.sh`) and bootstrapping (`./bootstrap.sh`) are separate commands with separate lifecycles:
+
+- `./init.sh` runs once from the pre-init scaffold branch. It creates the membrane branch topology and finishes by checking out `now`. It is not needed again after successful completion.
+- `./bootstrap.sh` runs from the `now` branch. It activates enforcement (sets `core.hooksPath`, builds derived artifacts, initializes submodules per D22). It is idempotent and needed on every fresh checkout.
+
+A second operator who clones an already-initialized repository skips init entirely and runs only `./bootstrap.sh` after checking out `now`. The two commands share no operational dependency beyond init producing the topology that bootstrap expects to find.
+
+### 7.2 Provenance preservation
+
+Initialization never rewrites, squashes, or deletes pre-existing history. Whatever commit lineage existed before initialization is preserved as provenance:
+
+- The pre-init scaffold lineage is recorded as `provenance/scaffold`, a new branch ref pointing at the scaffold tip at the time of initialization.
+- If the operator made additional commits on the scaffold branch before running init, those commits remain in the provenance lineage.
+- The membrane branches (`now`, `meta`) descend from a fresh common root commit with disjoint ancestry from the provenance lineage (per D26).
+- The original branch name (e.g. `main`) is left intact. Init is purely additive — it creates new refs, never modifies or deletes existing ones. The operator may remove the original branch name at their discretion after initialization.
+
+**Decision [D29 — CLOSED]:** Initialization preserves provenance and never rewrites history. The pre-existing scaffold lineage — including any operator commits made before init — is retained as `provenance/scaffold`. Membrane branches are created as a new lineage from a fresh common root. No existing ref is renamed, modified, or deleted by the initializer.
+
+### 7.3 Initialization markers and re-run detection
+
+Initialization is recognized by explicit membrane markers and canonical refs, not by branch-name coincidence alone.
+
+The markers are:
+
+- **`refs/membrane/root`** — points to the empty common root commit from which all membrane branches descend.
+- **Canonical membrane branches** — `now` and `meta` both descend from the commit at `refs/membrane/root`.
+
+Re-run detection checks for the membrane markers:
+
+- If `refs/membrane/root` exists and canonical branches descend from it: already initialized. Print a no-op message, exit 0.
+- If `refs/membrane/root` exists but some canonical branches are missing or not yet seeded: partial initialization. Resume from the first incomplete step.
+- If `refs/membrane/root` does not exist: not yet initialized. Proceed with full initialization.
+
+A branch named `now` that does not descend from the membrane root is not treated as evidence of prior initialization.
+
+**Decision [D30 — CLOSED]:** Initialization is stepwise-idempotent and marker-based. Each step is guarded by a precondition check; if already complete, it is skipped. After full successful completion, re-run detects the initialized state via `refs/membrane/root` and the canonical branch lineage, and exits 0. Detection relies on membrane markers, not on branch-name coincidence.
+
+### 7.4 Initialization steps
+
+The initializer performs the following discrete steps, each independently guarded for idempotence:
+
+1. **Create root ref** — create the empty common root commit and store it as `refs/membrane/root`.
+2. **Record provenance** — create `provenance/scaffold` pointing at the current scaffold branch tip.
+3. **Create `now`** — branch from the common root.
+4. **Create `meta`** — branch from the common root.
+5. **Seed `now`** — populate with the canonical skeleton: `.now/hooks/`, `bootstrap.sh`, `.gitmodules` (declaring the `meta` submodule), `.gitignore`.
+6. **Seed `meta`** — populate with minimal initial content.
+7. **Seed planning files** — create the five planning files in `plan/` on `now` with protocol headers and starter content (per D27).
+8. **Checkout `now`** — switch the working tree to the `now` branch.
+
+If any step fails, the operator re-runs `./init.sh`. The script detects which steps are complete via the membrane markers and branch state, and resumes from the first incomplete step. No manual cleanup is required at any failure point.
+
+### 7.5 Scope boundary: local topology only
+
+The initializer defines local Git topology. It does not modify or depend on:
+
+- Remote default branch settings
+- Branch protection rules
+- GitHub template configuration
+- Any hosted platform state
+
+Hosted platform configuration (e.g. changing the GitHub default branch to `now`, setting up branch protections) is a packaging and documentation concern addressed separately, not a responsibility of the initializer.
+
+**Decision [D31 — CLOSED]:** Initialization defines local Git topology only; hosted platform settings are out of scope. `init.sh` operates entirely within the local repository using Git commands. Any hosted platform configuration is handled separately through documentation or admin tooling.
+
+---
+
+## 8. Bootstrapping
 
 A fresh checkout of the now branch requires one setup step:
 
@@ -417,7 +496,7 @@ After bootstrap, all subsequent operations are governed. The bootstrap script it
 
 ---
 
-## 8. Areas of genuine uncertainty
+## 9. Areas of genuine uncertainty
 
 The following are not open decisions awaiting a resolution so much as areas where the design may be wrong in ways we haven't yet discovered.
 
@@ -458,9 +537,13 @@ The following are not open decisions awaiting a resolution so much as areas wher
 | D19 | OPEN | 5.3 | Source language for enforcement logic |
 | D20 | CLOSED | 5.4 | Freshness check via mtime comparison (initial heuristic) |
 | D21 | CLOSED | 6 | Worktree-per-role as expected working model |
-| D22 | CLOSED | 7 | Single bootstrap entry point with recovery semantics |
-| D23 | OPEN | 7 | Submodule initialization strategy |
+| D22 | CLOSED | 8 | Single bootstrap entry point with recovery semantics |
+| D23 | OPEN | 8 | Submodule initialization strategy |
 | D24 | CLOSED | 1.4 | Role-namespaced branch naming (past/, future/, provenance/) |
 | D25 | CLOSED | 1.4 | Initialized set: now, meta, provenance/scaffold only |
 | D26 | CLOSED | 1.5 | Provenance branch invariants — outside membrane topology |
 | D27 | CLOSED | 2.4 | Planning files on now in plan/ |
+| D28 | CLOSED | 7.1 | Initializer/bootstrap lifecycle split |
+| D29 | CLOSED | 7.2 | Initialization preserves provenance, never rewrites history |
+| D30 | CLOSED | 7.3 | Stepwise-idempotent, marker-based initialization |
+| D31 | CLOSED | 7.5 | Init defines local Git topology only; platform settings out of scope |
