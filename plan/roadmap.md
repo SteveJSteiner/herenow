@@ -257,9 +257,11 @@ GT15 -> GT16
   - README for pre-init vs post-init state
   - optional GitHub CLI path
   - explicit warning that template generation alone does not produce the final governed topology until init runs
+  - ensure the published template remote contains only scaffold/template-authoring branches — no membrane branches (`now`, `meta`, `provenance/scaffold`) or `refs/membrane/root` (D32)
 - **Acceptance:**
   - A new operator can generate a repo from the template and understand the next command without reading design internals.
   - Packaging docs only describe workflows that actually exist in the implemented spine.
+  - The published template remote exposes no membrane branches or refs. Verified by inspecting the remote ref list before marking the template ready.
 
 ### GT15 — Fresh-repo acceptance from GitHub template to governed membrane
 - **Kind:** H
@@ -268,6 +270,7 @@ GT15 -> GT16
 - **Acceptance:**
   - Starting from a newly generated GitHub repo, the operator can reach a governed `now` branch with working constraints by following the documented steps.
   - The acceptance script records concrete checks instead of prose claims.
+  - Before `./init.sh` runs, the generated repo contains no membrane branches and no `refs/membrane/root`. Validated under both default-branch-only and "Include all branches" template creation paths (D32).
 
 ### GT16 — Hardening, split policy, and first-release cut
 - **Kind:** H

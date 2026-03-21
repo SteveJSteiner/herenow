@@ -443,6 +443,8 @@ A branch named `now` that does not descend from the membrane root is not treated
 
 **Decision [D30 — CLOSED]:** Initialization is stepwise-idempotent and marker-based. Each step is guarded by a precondition check; if already complete, it is skipped. After full successful completion, re-run detects the initialized state via `refs/membrane/root` and the canonical branch lineage, and exits 0. Detection relies on membrane markers, not on branch-name coincidence.
 
+**Decision [D32 — CLOSED]:** Published-template invariant. The published template remote must contain only scaffold/template-authoring branches intended for templating. Membrane branches (`now`, `meta`, `provenance/scaffold`) and `refs/membrane/root` are outputs of `./init.sh` and must not be present on the published template remote. A fresh repo created from the template must not appear initialized under either default-branch-only creation or any branch-copying path (GitHub's "Include all branches" option). This is a consequence of D30's marker-based detection — if the template ships membrane markers, a generated repo looks initialized before `./init.sh` runs, collapsing the scaffold/initialized boundary.
+
 ### 7.4 Initialization steps
 
 The initializer performs the following discrete steps, each independently guarded for idempotence:
@@ -547,3 +549,4 @@ The following are not open decisions awaiting a resolution so much as areas wher
 | D29 | CLOSED | 7.2 | Initialization preserves provenance, never rewrites history |
 | D30 | CLOSED | 7.3 | Stepwise-idempotent, marker-based initialization |
 | D31 | CLOSED | 7.5 | Init defines local Git topology only; platform settings out of scope |
+| D32 | CLOSED | 7.3 | Published-template invariant — no membrane branches or refs on template remote |

@@ -26,13 +26,13 @@ GT3 is complete. The membrane branch topology exists: `refs/membrane/root`, `now
 - `decisions.md` §5.1 (D14: two-layer enforcement, D16: hook launchers are POSIX shell)
 - `decisions.md` §2.3 (D3-LAYOUT: `.now/hooks/` is the hooks directory, `core.hooksPath` points there)
 - `decisions.md` §3.1 (D4: self-referencing submodules, known hazard re: recursive init)
+- `decisions.md` §7.3 (D32: published-template invariant — membrane branches are init.sh outputs, not template content)
 - `roadmap.md` (GT6 node definition and acceptance criteria)
 - GT3 output: `init.sh` and the initialized branch topology it produces
 
 ## Output Files
 
-- `bootstrap.sh` (replace the stub on the `now` branch skeleton produced by `init.sh`)
-- `init.sh` (update step 5 to seed the functional `bootstrap.sh` instead of the stub)
+- `init.sh` (on `main`): replace the stub bootstrap.sh heredoc in step 5 with the functional implementation
 - `decisions.md` (only if implementation reveals a design gap requiring a new decision)
 - `continuation.md` (refresh state while GT6 remains active)
 
@@ -50,6 +50,9 @@ GT3 is complete. The membrane branch topology exists: `refs/membrane/root`, `now
 - The hook stubs from GT3 are already in `.now/hooks/` — bootstrap just needs to point `core.hooksPath` there.
 - The `meta` submodule is declared in `.gitmodules` with `url = ./` — bootstrap must initialize it non-recursively.
 - Bootstrap must leave a clear recovery path if it fails mid-flight (D22).
+- The existing `now`, `meta`, `provenance/scaffold` branches and `refs/membrane/root` in this repo are GT3 test artifacts, not template content (D32). They are not part of the published template surface.
+- bootstrap.sh is authored as the heredoc embedded in `init.sh` step 5 (on `main`). The copy on the current `now` branch is a test artifact — GT6 does not edit it directly.
+- All GT6 development happens on `main`. Testing runs in disposable clones initialized from scratch: clone scaffold, run `init.sh`, run `bootstrap.sh`, discard.
 
 ## Scope Boundary
 
@@ -67,6 +70,7 @@ Out of scope:
 - worktree provisioning (GT12)
 - submodule path policy (GT4/D6-PATHS)
 - resolving D23 fully — use the current leaning (selective/non-recursive) and note if it proves insufficient
+- cleaning up GT3 test artifacts (membrane branches/refs) from this repo — that is a pre-publication concern absorbed by GT14 (D32)
 
 ## Success Condition
 
@@ -79,12 +83,15 @@ Out of scope:
 
 ## Stress Test
 
+Each scenario starts from a disposable clone of `main` (scaffold only). Run `init.sh` to create the membrane topology, then exercise `bootstrap.sh`.
+
 - Run bootstrap on a freshly checked-out `now` — does it complete and set hooksPath?
 - Run bootstrap twice — is the second run idempotent?
 - Run bootstrap when `meta` submodule is already initialized — does it skip or update cleanly?
 - Run bootstrap when `core.hooksPath` is already set to `.now/hooks/` — no-op or safe refresh?
 - Delete `meta/` and re-run bootstrap — does it recover?
 - Run bootstrap on a branch that is NOT `now` — does it fail with a clear message or proceed cautiously?
+- Run bootstrap on a scaffold repo that has NOT been initialized — does it fail with a clear message?
 
 ## Audit Target
 
