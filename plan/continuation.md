@@ -12,105 +12,95 @@
 
 ## Task Identity
 
-- **Node ID:** GT3
-- **Title:** Create common-root membrane topology in a generated repo
+- **Node ID:** GT6
+- **Title:** Bootstrap governed now-branch environment
 - **Status:** ACTIVE
 
 ## Why now
 
-GT1 and GT2 are both closed. GT1 settled the canonical skeleton, branch naming (D24), initialized branch set (D25), provenance invariants (D26), and planning-file placement (D27). GT2 settled the initializer command contract (D28), provenance preservation (D29), marker-based idempotence (D30), and local-only scope boundary (D31). GT3 is now unblocked and is the sole entry point to the implementation spine — GT5, GT6, and GT12 all depend on GT3.
+GT3 is complete. The membrane branch topology exists: `refs/membrane/root`, `now`, `meta`, `provenance/scaffold`. The `now` branch carries the canonical skeleton with stub hooks and a placeholder `bootstrap.sh`. GT6 is the natural successor — it makes the initialized topology operational by implementing `bootstrap.sh`. Without GT6, a fresh checkout of `now` has no way to activate enforcement.
 
 ## Dependencies
 
-- `decisions.md` §7 (D28–D31: init command contract, provenance, idempotence, scope)
-- `decisions.md` §1.4–1.5 (D24–D26: branch naming, initialized set, provenance invariants)
-- `decisions.md` §2.3–2.4 (D3-LAYOUT, D27: now-branch skeleton, planning files)
-- `roadmap.md` (GT3 node definition and acceptance criteria)
+- `decisions.md` §8 (D22: single bootstrap entry point, D23: submodule initialization strategy)
+- `decisions.md` §5.1 (D14: two-layer enforcement, D16: hook launchers are POSIX shell)
+- `decisions.md` §2.3 (D3-LAYOUT: `.now/hooks/` is the hooks directory, `core.hooksPath` points there)
+- `decisions.md` §3.1 (D4: self-referencing submodules, known hazard re: recursive init)
+- `roadmap.md` (GT6 node definition and acceptance criteria)
+- GT3 output: `init.sh` and the initialized branch topology it produces
 
 ## Output Files
 
-- `init.sh` (the initializer script, living on the pre-init scaffold branch)
+- `bootstrap.sh` (replace the stub on the `now` branch skeleton produced by `init.sh`)
+- `init.sh` (update step 5 to seed the functional `bootstrap.sh` instead of the stub)
 - `decisions.md` (only if implementation reveals a design gap requiring a new decision)
-- `roadmap.md` (only if GT3 changes downstream boundaries)
-- `continuation.md` (refresh state while GT3 remains active)
+- `continuation.md` (refresh state while GT6 remains active)
 
 ## Local Context
 
-- GT3 is a C (implementation) node. The design decisions are settled; this is about writing `init.sh`.
-- The eight initialization steps from §7.4 are the implementation contract:
-  1. Create root ref (`refs/membrane/root`)
-  2. Record provenance (`provenance/scaffold`)
-  3. Create `now` from root
-  4. Create `meta` from root
-  5. Seed `now` (canonical skeleton)
-  6. Seed `meta` (minimal content)
-  7. Seed planning files (`plan/` on `now`)
-  8. Checkout `now`
-- Each step must be independently guarded for idempotence per D30.
-- Init is purely additive per D29 — it never modifies or deletes existing refs.
-- The init script is POSIX shell, non-interactive, meaningful exit codes per D28.
-- `refs/membrane/root` is the primary initialization marker per D30.
-- The now-branch skeleton layout is defined in D3-LAYOUT §2.3.
-- Planning files are defined in D27 §2.4 — five files with protocol headers.
-- Initial `.gitmodules` declares only the `meta` submodule per D25.
+- GT6 is a C (implementation) node. Most design decisions are settled; D23 (submodule init strategy) is OPEN but has a current leaning (selective).
+- `bootstrap.sh` lives at the `now` branch root per D3-LAYOUT.
+- Bootstrap is idempotent per D22 — safe to re-run on every fresh checkout.
+- Bootstrap is separate from init per D28 — a second operator who clones an already-initialized repo runs only `bootstrap.sh`.
+- The bootstrap contract from §8:
+  1. Set `core.hooksPath` to `.now/hooks/`
+  2. Build enforcement binary from source (if source exists and binary is missing/stale) — currently no source exists (D18/D19 still open), so this step is a no-op or a future-ready check
+  3. Initialize submodules selectively (not recursively — D4 known hazard)
+  4. Optionally create worktrees for standard roles (this is GT12 territory; bootstrap may prepare but should not require it)
+- The hook stubs from GT3 are already in `.now/hooks/` — bootstrap just needs to point `core.hooksPath` there.
+- The `meta` submodule is declared in `.gitmodules` with `url = ./` — bootstrap must initialize it non-recursively.
+- Bootstrap must leave a clear recovery path if it fails mid-flight (D22).
 
 ## Scope Boundary
 
 In scope:
-- implement `init.sh` following the eight-step contract
-- create the empty common root commit and store it as `refs/membrane/root`
-- create `now`, `meta`, and `provenance/scaffold` branches
-- seed `now` with the canonical skeleton (`.now/hooks/`, `bootstrap.sh`, `.gitmodules`, `.gitignore`)
-- seed `meta` with minimal initial content
-- seed `plan/` with the five planning files and protocol headers
-- implement step-level idempotence guards
-- implement re-run detection (already-initialized → no-op exit 0)
+- implement functional `bootstrap.sh` following the §8 contract
+- set `core.hooksPath` to `.now/hooks/`
+- initialize the `meta` submodule non-recursively
+- verify the working tree is ready for governed operations
+- leave retryable state or explicit recovery instructions on failure
+- update `init.sh` step 5 to seed the functional bootstrap instead of the stub
 
 Out of scope:
-- implementing `bootstrap.sh` (GT6)
-- implementing enforcement logic or hook content beyond stub launchers (GT7+)
-- resolving D6-PATHS (submodule path policy — GT4)
-- resolving D18 (enforcement source placement) or D19 (source language)
-- any hosted platform configuration (D31)
+- implementing enforcement logic in the hook stubs (GT7+)
+- building enforcement binaries (no source exists yet — D18/D19 still open)
+- worktree provisioning (GT12)
+- submodule path policy (GT4/D6-PATHS)
+- resolving D23 fully — use the current leaning (selective/non-recursive) and note if it proves insufficient
 
 ## Success Condition
 
-- A fresh repo created from the template can be initialized with `./init.sh` into the canonical branch topology.
-- `git merge-base` across any pair of membrane branches (`now`, `meta`) resolves to the common root at `refs/membrane/root`.
-- `provenance/scaffold` shares no commit ancestry with membrane branches.
-- Re-running `./init.sh` on an already-initialized repo prints a no-op message and exits 0.
-- Partial failure at any step can be recovered by re-running `./init.sh`.
-- The now branch carries the canonical skeleton layout per D3-LAYOUT.
-- The five planning files exist in `plan/` with protocol headers per D27.
+- A fresh checkout of `now` becomes governed with `./bootstrap.sh`.
+- `git config core.hooksPath` returns `.now/hooks/` after bootstrap.
+- The `meta` submodule is initialized and checked out at `meta/`.
+- Bootstrap does not recurse through self-referential submodule workflows (D4 hazard avoided).
+- Re-running `bootstrap.sh` on an already-bootstrapped checkout is a safe no-op or idempotent refresh.
+- Failure messages tell the operator what is missing and whether rerun is safe.
 
 ## Stress Test
 
-- Run init on a repo with no pre-init commits (bare template clone) — does it succeed?
-- Run init on a repo with extra pre-init commits — does `provenance/scaffold` include them?
-- Kill init after step 3 (branches created, not yet seeded) — does re-run complete cleanly?
-- Run init twice in succession — does the second invocation no-op exit 0?
-- Run init when a branch named `now` already exists but does NOT descend from a membrane root — does init correctly identify this as uninitialized?
-- Verify `git merge-base now meta` resolves to the commit at `refs/membrane/root`.
-- Verify `git merge-base --is-ancestor` fails between `provenance/scaffold` and `now`.
+- Run bootstrap on a freshly checked-out `now` — does it complete and set hooksPath?
+- Run bootstrap twice — is the second run idempotent?
+- Run bootstrap when `meta` submodule is already initialized — does it skip or update cleanly?
+- Run bootstrap when `core.hooksPath` is already set to `.now/hooks/` — no-op or safe refresh?
+- Delete `meta/` and re-run bootstrap — does it recover?
+- Run bootstrap on a branch that is NOT `now` — does it fail with a clear message or proceed cautiously?
 
 ## Audit Target
 
-Audit these claims after GT3 lands:
-- the eight steps from §7.4 are implemented in order, each with an idempotence guard
-- `refs/membrane/root` is created and used as the sole initialization marker
-- the init script is purely additive — no existing refs are modified or deleted (D29)
-- the now-branch skeleton matches D3-LAYOUT §2.3
-- the planning files match D27 §2.4 protocol headers
-- the init script is POSIX shell, non-interactive, exits 0 on success/already-initialized and non-zero on failure (D28)
-- no enforcement logic or bootstrap activation leaked into init (those belong to GT6, GT7+)
+Audit these claims after GT6 lands:
+- `core.hooksPath` is set to `.now/hooks/` and the hooks are executable
+- the `meta` submodule is initialized non-recursively (no self-referential recursion)
+- bootstrap is idempotent — safe to re-run
+- bootstrap does not activate enforcement logic (that belongs to GT7+)
+- bootstrap failure leaves a recoverable state with clear instructions
+- `init.sh` seeds the functional `bootstrap.sh`, not the stub
 
 ## Verification
 
-- `git rev-parse refs/membrane/root` — the root ref exists
-- `git merge-base now meta` equals `refs/membrane/root`
-- `git merge-base --is-ancestor provenance/scaffold now` — fails (disjoint ancestry)
-- `git log --oneline now -- .now/hooks/` — hook stubs exist
-- `git log --oneline now -- bootstrap.sh` — bootstrap.sh exists
-- `git log --oneline now -- .gitmodules` — meta submodule declared
-- `git log --oneline now -- plan/` — five planning files exist
-- `./init.sh && echo $?` on already-initialized repo — prints 0
+- `./bootstrap.sh` on fresh `now` checkout — exits 0
+- `git config core.hooksPath` — returns `.now/hooks/`
+- `ls meta/README.md` — meta submodule content is present
+- `git submodule status` — meta submodule is initialized, no recursive entries
+- `./bootstrap.sh` again — idempotent, exits 0
+- `rm -rf meta && ./bootstrap.sh` — recovers meta submodule
