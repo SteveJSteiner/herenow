@@ -125,12 +125,14 @@ GT15 -> GT16
 - **Goal:** Implement the initializer step that creates the real membrane branch topology with a contentless common root.
 - **Scope:**
   - create empty common root commit
-  - create `now`, `past/*`, `future/*`, `meta`, and provenance/scaffold branches according to the canonical skeleton
-  - place starter content on the correct branches
-  - retain the pre-init scaffold state visibly as provenance while keeping it out-of-band from membrane ancestry
+  - create `now`, `meta`, and `provenance/scaffold` branches (per D25: past and future branches are not created at init)
+  - rename/move the pre-init template branch to `provenance/scaffold` (per D26: disjoint ancestry from membrane branches)
+  - place the canonical now-branch skeleton (per D3-LAYOUT) and minimal meta content on their respective branches
+  - initial `.gitmodules` declares only the `meta` submodule
 - **Acceptance:**
   - A fresh repo created from the template can be initialized locally into the canonical branch topology with one command.
-  - `git merge-base` across any pair of membrane branches resolves to the common root or a descendant thereof as expected.
+  - `git merge-base` across any pair of membrane branches (`now`, `meta`) resolves to the common root.
+  - `provenance/scaffold` shares no commit ancestry with membrane branches.
   - Re-running init either no-ops safely or fails with a deliberate, documented message.
 
 ### GT4 — Canonical `.gitmodules` schema and path policy
@@ -147,10 +149,10 @@ GT15 -> GT16
 ### GT5 — Generate starter planning files and front matter
 - **Kind:** C
 - **Depends on:** GT1, GT3
-- **Goal:** Automatically create `roadmap.md`, `continuation.md`, and `completion-log.md` with the correct front matter and usage notes on the canonical branch/layout where they belong.
+- **Goal:** Automatically create all five planning files (`requirements.md`, `decisions.md`, `roadmap.md`, `continuation.md`, `completion-log.md`) in `plan/` on `now` with the correct protocol headers and minimal starter content (per D27).
 - **Acceptance:**
-  - Init generates all three files in the intended location.
-  - The front matter describes how each file is used and mutated.
+  - Init generates all five files in `plan/` on the `now` branch.
+  - Each file carries the protocol header contract defined in §2.4 of `decisions.md`.
   - The initial `continuation.md` points at the first unfinished node rather than free text.
 
 ### GT6 — Bootstrap governed now-branch environment
@@ -287,6 +289,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT1 — Canonical skeleton and document contracts**
+**GT2 — Initializer UX and idempotence contract**
 
-GT0 is effectively resolved now. The next live boundary is to freeze the canonical initialized layout, including branch naming, where the planning files live, and how visible provenance is represented without contaminating membrane ancestry.
+GT1 is resolved: the canonical initialized layout, branch naming, planning-file placement, and provenance invariants are settled in `decisions.md` (D3-LAYOUT, D24–D27). The next live boundary is to specify the user-facing init entry point, its idempotence/recovery model, and failure semantics so GT3 can implement without hidden product decisions.

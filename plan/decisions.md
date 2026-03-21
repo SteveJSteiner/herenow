@@ -100,6 +100,33 @@ The system distinguishes four roles. These are not git constructs — git knows 
 
 The four-role distinction is a design choice, not a necessity. A simpler system might have only past and now, or might not distinguish meta from now. The current design reflects a specific judgment that the composition of the present and the governance of that composition are usefully separable concerns.
 
+### 1.4 Branch naming and initialized topology
+
+The initialized repository uses the following branch namespace:
+
+- **`now`** — the composition branch. Singular. The primary working surface.
+- **`past/<name>`** — settled-work branches. Each past branch carries its own name under the `past/` namespace.
+- **`future/<name>`** — speculative branches. Each future carries its own name under the `future/` namespace.
+- **`meta`** — operational self-governance. Singular until a concrete use case for multiple meta branches emerges.
+- **`provenance/scaffold`** — the pre-init GitHub template history. Not part of the membrane topology (see §1.5).
+
+**Decision [D24 — CLOSED]:** Branch names use role-based namespaces: `past/`, `future/`, `provenance/`. `now` and `meta` are bare names. This makes role visible in `git branch` output and ref listings without requiring extra metadata lookup. The namespace convention applies to branch names in `refs/heads/`; submodule checkout paths on the now branch tree are a separate question (see D6-PATHS, still open).
+
+**Decision [D25 — CLOSED]:** The initialized branch set — what exists immediately after `init` — is `now`, `meta`, and `provenance/scaffold`. Past and future branches are not created at initialization; they are created by the operator when substantive work begins. The initial `.gitmodules` on `now` declares only the `meta` submodule. Past and future submodule entries are added as the operator creates and pins those branches.
+
+### 1.5 Provenance branch
+
+The pre-init scaffold history (the GitHub template's original branch) is retained as `provenance/scaffold`. This branch is visible for inspection but is not part of the temporal membrane topology.
+
+**Decision [D26 — CLOSED]:** Provenance invariants:
+
+1. The provenance branch shares no commit ancestry with membrane branches. Membrane branches descend from a fresh common-root commit created at initialization; the provenance branch descends from the template's original history. These are disjoint commit graphs within the same object store.
+2. Enforcement hooks do not traverse, check, or constrain the provenance branch.
+3. The provenance branch is not declared as a submodule in `.gitmodules`.
+4. R2 (common origin) applies to membrane branches — `now`, `past/*`, `future/*`, `meta` — not to provenance. The provenance branch is outside the system that R2 governs.
+
+The provenance branch exists solely so an operator can inspect how the repository was scaffolded. It is an archaeological record, not a governed participant.
+
 ---
 
 ## 2. The now branch
@@ -125,25 +152,57 @@ The history of the now branch is therefore readable as two interleaved records: 
 
 ### 2.3 Path layout
 
-The current sketch for the now branch's tree:
+The now branch's tree after initialization:
 
 ```
-hooks/
-  pre-merge-commit
-  post-merge
-  pre-commit
-  post-commit
 .now/
-  src/                  # enforcement source (if source lives on now — see §5.2)
-  Cargo.toml
-  Cargo.lock
-  bin/                  # .gitignore'd — cached compiled binary
-.gitmodules             # submodule declarations with role keys
-.gitignore              # ignores .now/bin/
-bootstrap.sh
+  hooks/
+    pre-merge-commit
+    post-merge
+    pre-commit
+    post-commit
+    post-rewrite
+  src/                    # enforcement source — present only if D18 resolves to "on now"
+  bin/                    # .gitignore'd compiled cache — present only if D19 resolves to compiled
+plan/
+  requirements.md
+  decisions.md
+  roadmap.md
+  continuation.md
+  completion-log.md
+meta/                     # meta submodule checkout (path subject to D6-PATHS for future past/future entries)
+.gitmodules               # submodule declarations with custom role keys
+.gitignore                # ignores .now/bin/ and other derived artifacts
+bootstrap.sh              # single bootstrap entry point
 ```
 
-**Decision [D3-LAYOUT — OPEN]:** This layout is provisional. Open questions include whether `.now/` is the right namespace, whether `bootstrap.sh` belongs at root or inside `.now/`, and whether the enforcement source belongs on now at all (see §5.2).
+The `.now/` directory is the namespace for enforcement machinery: hook launchers, enforcement source (if on now per D18), and derived build artifacts. It is the operational kernel of the now branch. `core.hooksPath` points to `.now/hooks/`.
+
+The `plan/` directory holds all planning and governance documents (see §2.4).
+
+The `meta/` directory is the checkout path for the meta submodule. When past and future submodules are added later, their checkout paths are governed by D6-PATHS (flat vs. hierarchical, still open).
+
+`bootstrap.sh` lives at the now branch root for discoverability — it is the first thing an operator runs after checkout.
+
+**Decision [D3-LAYOUT — CLOSED]:** `.now/` is the enforcement namespace. `plan/` is the planning-file namespace. `bootstrap.sh` is at root. The layout accommodates both D18 outcomes (enforcement source on now vs. in meta) and both D19 outcomes (shell vs. compiled): `.now/src/` and `.now/bin/` appear only when those decisions call for them. Submodule checkout paths for past and future entries remain subject to D6-PATHS.
+
+### 2.4 Planning file placement and document contracts
+
+The five planning documents live on the `now` branch in `plan/`:
+
+| File | Authority | Mutation rule |
+|------|-----------|---------------|
+| `requirements.md` | Requirements only | Edit only when requirements change |
+| `decisions.md` | Design choices only | Edit when technical design changes |
+| `roadmap.md` | Sequencing and integration | Edit when sequencing, chunk boundaries, or validation strategy changes |
+| `continuation.md` | Current-task execution | Replace when the active task changes; refresh in place while it remains active |
+| `completion-log.md` | Transition history | Append-only; one line per material continuation transition |
+
+Each file carries a protocol header specifying its purpose, authority, must-contain/must-not-contain rules, and update discipline. These headers are the file's self-enforcing contract — they define what the file is allowed to hold and when it should be mutated.
+
+**Decision [D27 — CLOSED]:** Planning files live on `now` in `plan/`. They are operational metadata permitted by R3, not domain payload. They describe the project's compositional intent and execution state — properties of the present. Placing them on `now` keeps them directly visible on the primary working surface. Placing them on `meta` was considered but rejected: meta's role is enforcement machinery and tooling, not project management. The planning files are about what the present is doing; meta is about how the present governs itself.
+
+The front-matter contract for each file is stable enough for GT5 to generate starter versions with the correct protocol headers automatically. The initializer creates all five files with protocol headers and minimal starter content.
 
 ---
 
@@ -380,7 +439,7 @@ The following are not open decisions awaiting a resolution so much as areas wher
 |----|--------|----|---------|
 | D1 | CLOSED | 1.2 | Common root, not orphan branches |
 | D2 | CLOSED | 2.1 | Now is pure composition, no substantive content |
-| D3-LAYOUT | OPEN | 2.3 | Path layout on the now branch |
+| D3-LAYOUT | CLOSED | 2.3 | Path layout on the now branch |
 | D4 | CLOSED | 3.1 | Self-referencing submodules via relative self-URL |
 | D5 | CLOSED | 3.2 | Role declaration via custom .gitmodules keys |
 | D6-PATHS | OPEN | 3.2 | Hierarchical vs. flat submodule paths |
@@ -401,3 +460,7 @@ The following are not open decisions awaiting a resolution so much as areas wher
 | D21 | CLOSED | 6 | Worktree-per-role as expected working model |
 | D22 | CLOSED | 7 | Single bootstrap entry point with recovery semantics |
 | D23 | OPEN | 7 | Submodule initialization strategy |
+| D24 | CLOSED | 1.4 | Role-namespaced branch naming (past/, future/, provenance/) |
+| D25 | CLOSED | 1.4 | Initialized set: now, meta, provenance/scaffold only |
+| D26 | CLOSED | 1.5 | Provenance branch invariants — outside membrane topology |
+| D27 | CLOSED | 2.4 | Planning files on now in plan/ |
