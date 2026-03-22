@@ -12,80 +12,83 @@
 
 ## Task Identity
 
-- **Node ID:** GT8b
-- **Title:** Constraint engine v1: grounded futures
+- **Node ID:** GT8c
+- **Title:** Constraint engine v1: atomic cross-check pass
 - **Status:** READY
 
 ## Why now
 
-GT8a is complete — `.now/src/check-past-monotonicity.sh` implements the monotonic-past check, passing all 11 tests (valid advancement, newly added, non-past ignored, backward/sideways rejection, mixed multi-submodule, error message content). GT8b is now unblocked. GT8b shares infrastructure patterns with GT8a (submodule name parsing, gitlink extraction from index) and is the other prerequisite for GT8c (atomic cross-check pass).
+GT8a and GT8b are both complete — the two prerequisite constraint checkers exist and pass their test suites:
+- `.now/src/check-past-monotonicity.sh` — 11 tests (monotonic past advancement)
+- `.now/src/check-future-grounding.sh` — 17 tests (future ancestry against named past)
+
+GT8c combines these into an all-or-nothing evaluator that checks the full resulting configuration atomically, including future retirement/removal semantics. GT8c unblocks GT9 (immune-response design) and GT11 (meta self-consistency).
 
 ## Dependencies
 
-- GT7 output: `.now/src/validate-gitmodules.sh` (role and ancestor-constraint lookup)
-- GT8a output: `.now/src/check-past-monotonicity.sh` (structural pattern reference — same parsing, same gitlink extraction)
-- `decisions.md` §4.2 (D9: futures must be grounded in a named past — `git merge-base` fork-point check)
-- `decisions.md` §4.2 (D10: fork point need not be current past tip — "descended from somewhere on past's line")
-- `decisions.md` §4.3 (D11: atomic consistency — checker evaluates the full resulting configuration)
-- `roadmap.md` GT8b acceptance criteria
+- GT8a output: `.now/src/check-past-monotonicity.sh` (past monotonicity check)
+- GT8b output: `.now/src/check-future-grounding.sh` (future grounding check)
+- GT7 output: `.now/src/validate-gitmodules.sh` (static schema validation — run first)
+- `decisions.md` §4.3 (D11: atomic consistency — full configuration, not individual pin updates)
+- `decisions.md` §4.3 (cross-constraints: advancing past may invalidate futures, requiring simultaneous re-grounding)
+- `roadmap.md` GT8c acceptance criteria
 
 ## Output Files
 
-- Grounded-future check implementation (likely `.now/src/check-future-grounding.sh`)
-- Fixture repos in `test/gt8b/run.sh` (real git history with submodule pins)
-- `continuation.md` (refresh state while GT8b remains active)
+- Atomic cross-check evaluator (likely `.now/src/check-composition.sh`)
+- Fixture repos in `test/gt8c/run.sh` (cross-constraint scenarios with real git history)
+- `continuation.md` (refresh state while GT8c remains active)
 
 ## Local Context
 
-- GT8b is a C (capability) node. The deliverable is working code, not design.
-- The check verifies each future-typed submodule's pin descends from its declared past's lineage.
-- For each future submodule: get future-pin and past-pin from the index (the candidate composition), find `git merge-base <future-pin> <past-pin>`, verify the fork point is non-trivial (not a root commit).
-- D10: the fork point need not be the current past tip. A future started from an earlier past state is still valid. The constraint is "descended from somewhere on past's line."
-- Both future-pin and past-pin are read from the index (candidate state), not HEAD. The check evaluates the resulting composition, not the delta.
-- `ancestor-constraint` key in `.gitmodules` names the past submodule each future must descend from.
+- GT8c is a C (capability) node. The deliverable is working code, not design.
+- The evaluator runs the full constraint suite against the candidate composition: schema validation (GT7), past monotonicity (GT8a), future grounding (GT8b).
+- D11: the checker evaluates the full configuration atomically. A commit that advances a past pin while breaking a future's grounding must be rejected as a whole.
+- Future retirement: removing a future submodule from the composition (deleting its `.gitmodules` entry and index gitlink) should not cause the remaining checks to fail. The retired future simply drops out of scope.
+- Cross-constraint interaction: advancing a past may require simultaneously updating futures that depend on it. The evaluator must catch the case where past advances but a dependent future's fork point is no longer on the past's current line.
+- Both GT8a and GT8b read from the index. The atomic evaluator can call them sequentially — if any fails, the composition is rejected.
 - D18 (enforcement location) and D19 (shell vs. compiled) remain open. Continue in POSIX shell.
 
 ## Scope Boundary
 
 In scope:
-- verify each future submodule's pin descends from its ancestor-constraint past's lineage
-- read both future-pin and past-pin from the index (candidate composition)
-- accept: fork point exists and is not a root commit
-- reject: no common ancestor, or fork point is a root commit (trivial shared history)
-- produce clear error messages identifying which future submodule, its ancestor-constraint, and the pins
-- run against fixture repos with real git history
+- compose GT7 + GT8a + GT8b into a single pass/fail evaluator
+- verify cross-constraint invalidation (past advance breaks future grounding)
+- verify future retirement (removing a future doesn't break remaining checks)
+- atomic: any single check failure rejects the entire composition
+- clear error output identifying which check(s) failed
 
 Out of scope:
-- past monotonicity checks (GT8a — already done)
-- cross-constraint atomicity (GT8c — combining GT8a + GT8b)
 - hook integration (wiring into pre-commit)
+- immune response (GT9)
+- meta self-consistency (GT11)
 - resolving D18 or D19
 
 ## Success Condition
 
-- Fixture repos cover valid and invalid grounding (GT8b acceptance).
-- Grounding checks are evaluated from the candidate resulting composition (GT8b acceptance).
+- Cross-constraint invalidation is tested rather than assumed (GT8c acceptance).
+- Removing a future from the resulting composition retires it cleanly from subsequent checks (GT8c acceptance).
 
 ## Stress Test
 
-- Does it handle a future forked from an early past commit (not the tip)?
-- Does it handle a future forked from the current past tip?
-- Does it handle a future with no shared history with its past (completely unrelated)?
-- Does it handle a future whose only shared ancestor is the root commit?
-- Does it handle multiple futures grounded in different pasts?
-- Does it handle a future whose past submodule has no pin in the index?
+- Does it reject a commit that advances past while breaking a future's grounding?
+- Does it accept a commit that advances past and simultaneously re-grounds the future?
+- Does it handle removing a future submodule cleanly (retirement)?
+- Does it reject when schema validation fails but individual checks would pass?
+- Does it report all violations, not just the first?
+- Does it pass when all constraints are satisfied simultaneously?
 
 ## Audit Target
 
-- Grounding check produces correct accept/reject on fixture repos
-- Error messages identify the failing future, its ancestor-constraint, and the relevant SHAs
-- The check uses `git merge-base` as specified in §4.2
-- Both pins are read from the index (candidate composition), not HEAD
+- Evaluator calls GT7, GT8a, GT8b checks in sequence
+- Cross-constraint failure (past advance + stale future) produces a rejection
+- Future retirement does not produce false positives
+- Error output is actionable: identifies which check failed and why
 
 ## Verification
 
-- Run check against fixture repo with future forked from past lineage → exit 0
-- Run check against fixture repo with future forked from past tip → exit 0
-- Run check against fixture repo with unrelated future → exit non-zero, error message names the violation
-- Run check against fixture repo with root-only shared ancestor → exit non-zero
-- Run check against fixture repo with multiple valid futures → exit 0
+- Run evaluator against composition where past advances and future is re-grounded → exit 0
+- Run evaluator against composition where past advances but future is stale → exit non-zero
+- Run evaluator against composition with a retired future → exit 0
+- Run evaluator against composition with schema violation → exit non-zero
+- Run evaluator against clean composition (all constraints met) → exit 0
