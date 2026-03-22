@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT12 — Worktree provisioning and operator ergonomics**
+**GT13 — End-to-end fixture repo and smoke scenarios**
 
-GT11 is complete: meta self-consistency mechanism implemented and tested (10/10 assertions). D12 closed — per-file blob-hash comparison using enforcement manifest on meta branch. GT12 is unblocked by GT3 and is the last dependency for GT13 (end-to-end smoke).
+GT12 is complete: worktree provisioner implemented and tested (34/34 assertions). All three GT13 dependencies are now met — GT10 (immune response), GT11 (meta self-consistency), GT12 (worktree provisioning). GT13 is the integration gate before packaging (GT14) and fresh-repo acceptance (GT15).

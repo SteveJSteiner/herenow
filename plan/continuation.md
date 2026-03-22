@@ -12,71 +12,82 @@
 
 ## Task Identity
 
-- **Node ID:** GT12
-- **Title:** Worktree provisioning and operator ergonomics
+- **Node ID:** GT13
+- **Title:** End-to-end fixture repo and smoke scenarios
 - **Status:** READY
 
 ## Why now
 
-GT11 is complete — meta self-consistency mechanism implemented and tested (10/10 assertions, D12 closed). GT12 is unblocked by GT3 (init.sh creates the branch structure that worktrees attach to). GT12 is the last dependency for GT13 (end-to-end smoke), which requires GT10 + GT11 + GT12.
+GT12 is complete — worktree provisioner implemented and tested (34/34 assertions). All three GT13 dependencies are met: GT10 (immune response), GT11 (meta self-consistency), GT12 (worktree provisioning). GT13 is the integration gate: it proves the full spine works end-to-end before packaging (GT14) and fresh-repo acceptance (GT15).
 
 ## Dependencies
 
-- GT3 output: `init.sh` creates `now`, `meta`, and `provenance/scaffold` branches — the branches that worktrees will be created from
-- D6-PATHS (CLOSED): submodule paths are flat at repo root, role in the key not the path
-- D3-LAYOUT (CLOSED): `.now/` is the enforcement namespace, `plan/` is the planning namespace
-- Current branch structure: `now`, `meta`, `main`, `provenance/scaffold`
+- GT3 output: `init.sh` creates membrane topology
+- GT6 output: `bootstrap.sh` activates governed environment
+- GT7/GT8a/GT8b/GT8c output: constraint engine (`.now/src/check-composition.sh` and siblings)
+- GT10 output: immune-response hooks (`.now/hooks/post-commit`, `post-merge`, `post-rewrite`) + shared logic (`immune-response.sh`)
+- GT11 output: meta self-consistency (`check-meta-consistency.sh`)
+- GT12 output: worktree provisioner (`provision-worktrees.sh`)
 
 ## Output Files
 
-- Worktree provisioning script (e.g., `.now/src/provision-worktrees.sh` or a subcommand in `bootstrap.sh`)
-- Test script validating worktree creation and safety
-- `continuation.md` (refresh state while GT12 remains active)
+- `test/gt13/smoke.sh` — single-command smoke test runner
+- `.now/hooks/pre-commit` — bypassable governance check (wires check-composition.sh into pre-commit surface; needed for "invalid composition rejected" scenario)
+- `.now/hooks/pre-merge-commit` — same for merge commits
+- `continuation.md` (refresh state while GT13 remains active)
 
 ## Local Context
 
-- GT12 is a C node. The deliverable is working code with tests.
-- Worktrees are an ergonomic layer. The command must be safe to skip — worktrees are convenience, not a hidden dependency for enforcement.
-- Standard worktrees: one for `now`, one for `meta`, at least one `past`, at least one `future`. The exact past/future branches depend on what `init.sh` created and what submodules exist.
-- Worktrees should be created at conventional locations relative to the repo root. The provisioner reads `.gitmodules` to discover which branches/roles exist.
-- The provisioner should be idempotent: re-running does not break existing worktrees.
-- Edge cases: what if a worktree already exists at the target path? What if the branch doesn't exist? What if the user has uncommitted changes in an existing worktree?
+- GT13 is an H node. The deliverable is a reproducible demonstration that the full spine works.
+- The smoke test must build a realistic fixture repo from scratch: init → install enforcement machinery → bootstrap → create temporal branches → exercise compositions.
+- Pre-commit hooks don't exist yet (init.sh plants stubs; GT10 only implemented post-hooks). The smoke test needs pre-commit to demonstrate "invalid composition blocked" vs "bypass → immune response". Writing thin pre-commit/pre-merge-commit wrappers around check-composition.sh is in scope.
+- The smoke test fixture must install enforcement scripts (`.now/src/*`) and real hooks onto the `now` branch, since init.sh only seeds stubs. This mirrors what the final template would ship.
+- Existing component tests (GT7: 26, GT8a: 11, GT8b: 17, GT8c: 20, GT12: 34) test pieces in isolation. GT13 tests them composed and sequenced as a user would encounter them.
 
 ## Scope Boundary
 
 In scope:
-- Implement worktree provisioning command
-- Create worktrees for now, meta, and any declared past/future submodule branches
-- Idempotent operation (safe to re-run)
-- Test with controlled scenarios
+- Single-command smoke script exercising the full lifecycle
+- Scenario coverage: init, bootstrap, valid composition, invalid composition (rejected), bypass + immune response, worktree provisioning
+- Thin pre-commit and pre-merge-commit hooks (wrappers around check-composition.sh)
 
 Out of scope:
-- Enforcement changes (GT10/GT11 complete)
-- End-to-end smoke scenarios (GT13)
 - GitHub template packaging (GT14)
+- Fresh-repo acceptance from template (GT15)
+- New enforcement logic or constraint changes
+
+## Smoke Scenarios
+
+1. **Init + Bootstrap** — run init.sh, install enforcement machinery, run bootstrap.sh. Verify: hooks active, meta submodule initialized, constraint evaluator reachable.
+2. **Valid composition** — create past branch (rca0) + future branch (sls) from membrane root, declare in .gitmodules, stage correct gitlinks, commit. Verify: commit succeeds, no immune response.
+3. **Invalid composition (pre-commit block)** — attempt backward past pin. Verify: commit rejected at pre-commit.
+4. **Bypass + immune response** — force invalid composition with `--no-verify`. Verify: commit lands, post-commit auto-reverts, revert commit present in log.
+5. **Worktree provisioning** — run provision-worktrees.sh. Verify: worktrees created for declared roles.
+6. **Meta consistency** — verify check-meta-consistency.sh passes with correct meta pin (or demonstrate detection of deliberate mismatch).
 
 ## Success Condition
 
-- Standard worktrees for `now`, one `meta`, and at least one `past` or `future` can be created from the initialized repo (GT12 acceptance).
-- The command is safe to skip; worktrees remain an ergonomic layer, not a hidden dependency (GT12 acceptance).
+- One command (`sh test/gt13/smoke.sh`) runs all scenarios and reports pass/fail.
+- Scenarios produce outputs suitable for regression testing and future agent use (GT13 acceptance).
 
 ## Stress Test
 
-- Does the provisioner create worktrees for all declared submodule branches?
-- Is the provisioner idempotent (re-run doesn't break existing worktrees)?
-- Does it handle missing branches gracefully?
-- Does it handle already-existing worktrees gracefully?
-- Does it work immediately after `init.sh` on a fresh repo?
-- Can enforcement operate correctly without worktrees being provisioned?
+- Does the smoke test work on a completely fresh temp directory (no leftover state)?
+- Does each scenario cleanly set up its own preconditions?
+- Are failures reported with enough context to diagnose?
+- Does the bypass scenario actually produce and then revert the violating commit?
+- Does the smoke test clean up after itself (no temp dirs left)?
 
 ## Audit Target
 
-- Provisioner script exists and is executable
-- Worktrees are created at conventional locations
-- Re-running does not produce errors or break existing state
-- Enforcement works with and without worktrees
+- Smoke script exists and is executable
+- All scenarios pass from a clean state
+- Pre-commit hooks reject invalid composition
+- Post-commit auto-reverts bypass violations
+- Worktree provisioning works within the smoke fixture
+- Existing component tests (GT7–GT12) still pass
 
 ## Verification
 
-- Test script exercises creation, idempotence, and edge cases with pass/fail assertions
-- Manual verification that enforcement hooks still work without worktrees
+- `sh test/gt13/smoke.sh` exits 0 with all scenarios passing
+- All existing test suites still pass after GT13 additions
