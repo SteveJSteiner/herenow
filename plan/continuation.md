@@ -12,83 +12,82 @@
 
 ## Task Identity
 
-- **Node ID:** GT8c
-- **Title:** Constraint engine v1: atomic cross-check pass
+- **Node ID:** GT9
+- **Title:** Immune-response design closure
 - **Status:** READY
 
 ## Why now
 
-GT8a and GT8b are both complete — the two prerequisite constraint checkers exist and pass their test suites:
-- `.now/src/check-past-monotonicity.sh` — 11 tests (monotonic past advancement)
-- `.now/src/check-future-grounding.sh` — 17 tests (future ancestry against named past)
+GT8c is complete — the atomic cross-check evaluator (`.now/src/check-composition.sh`) composes GT7 + GT8a + GT8b into a single pass/fail gate, with 20 tests covering cross-constraint invalidation, future retirement, full error reporting, and schema-only rejection. The constraint engine v1 is done.
 
-GT8c combines these into an all-or-nothing evaluator that checks the full resulting configuration atomically, including future retirement/removal semantics. GT8c unblocks GT9 (immune-response design) and GT11 (meta self-consistency).
+GT9 is a Q (design question) node that decides what happens when a violation is detected *after* commit — the non-bypassable immune-response layer. D14 established two-layer enforcement (gate + detection), but D15 (what the response *does*) is still open. GT9 closes D15.
+
+GT9 is on the critical path: GT9 → GT10 (implement immune response) → GT13 (end-to-end smoke).
 
 ## Dependencies
 
-- GT8a output: `.now/src/check-past-monotonicity.sh` (past monotonicity check)
-- GT8b output: `.now/src/check-future-grounding.sh` (future grounding check)
-- GT7 output: `.now/src/validate-gitmodules.sh` (static schema validation — run first)
-- `decisions.md` §4.3 (D11: atomic consistency — full configuration, not individual pin updates)
-- `decisions.md` §4.3 (cross-constraints: advancing past may invalidate futures, requiring simultaneous re-grounding)
-- `roadmap.md` GT8c acceptance criteria
+- GT8c output: `.now/src/check-composition.sh` (the evaluator the immune response will invoke for detection)
+- `decisions.md` §5.1 (D14: two-layer enforcement — closed; D15: immune response behavior — open)
+- `decisions.md` §5.1 candidate mechanisms: auto-revert, tag-and-refuse-next, tag-and-degrade
+- `decisions.md` §6 risk: "Post-hook revert mechanics … Whether auto-revert inside a post-hook is reliable across git versions, merge types, and edge cases is untested."
+- `roadmap.md` GT9 acceptance criteria
 
 ## Output Files
 
-- Atomic cross-check evaluator (likely `.now/src/check-composition.sh`)
-- Fixture repos in `test/gt8c/run.sh` (cross-constraint scenarios with real git history)
-- `continuation.md` (refresh state while GT8c remains active)
+- `decisions.md` update: close D15 with chosen mechanism and recorded reasons
+- `decisions.md` update: capture mechanical edge cases discovered during testing
+- `continuation.md` (refresh state while GT9 remains active)
 
 ## Local Context
 
-- GT8c is a C (capability) node. The deliverable is working code, not design.
-- The evaluator runs the full constraint suite against the candidate composition: schema validation (GT7), past monotonicity (GT8a), future grounding (GT8b).
-- D11: the checker evaluates the full configuration atomically. A commit that advances a past pin while breaking a future's grounding must be rejected as a whole.
-- Future retirement: removing a future submodule from the composition (deleting its `.gitmodules` entry and index gitlink) should not cause the remaining checks to fail. The retired future simply drops out of scope.
-- Cross-constraint interaction: advancing a past may require simultaneously updating futures that depend on it. The evaluator must catch the case where past advances but a dependent future's fork point is no longer on the past's current line.
-- Both GT8a and GT8b read from the index. The atomic evaluator can call them sequentially — if any fails, the composition is rejected.
-- D18 (enforcement location) and D19 (shell vs. compiled) remain open. Continue in POSIX shell.
+- GT9 is a Q node. The deliverable is a design decision, not code. But the acceptance criteria require that "mechanical edge cases discovered during testing are captured" — so empirical testing of the candidate mechanisms is expected, not just reasoning.
+- D14 established that `post-commit`, `post-merge`, and `post-rewrite` are the non-bypassable hooks. The immune response fires from these paths.
+- Current leaning per decisions.md: auto-revert if mechanically sound.
+- Key concern: can a post-commit hook reliably create a revert commit? Does this work across git versions, merge commits, and rewrite scenarios (amend, rebase)?
+- Alternative if auto-revert is unsound: tag-and-refuse-next (tag the violation, next governed operation checks parent and refuses). Weaker but simpler.
+- The constraint evaluator (`check-composition.sh`) already exists and can be called from post-hooks for detection. GT9 decides what happens *after* detection.
+- Rewrite-sensitive paths (`post-rewrite`) are explicitly required by GT9 acceptance: "Rewrite-sensitive hook paths are explicitly covered."
 
 ## Scope Boundary
 
 In scope:
-- compose GT7 + GT8a + GT8b into a single pass/fail evaluator
-- verify cross-constraint invalidation (past advance breaks future grounding)
-- verify future retirement (removing a future doesn't break remaining checks)
-- atomic: any single check failure rejects the entire composition
-- clear error output identifying which check(s) failed
+- empirically test auto-revert from post-commit hook (mechanically sound?)
+- empirically test auto-revert from post-merge hook
+- empirically test detection/response from post-rewrite hook (amend, rebase)
+- choose one mechanism with recorded reasons
+- capture discovered edge cases in decisions.md
+- explicitly cover rewrite-sensitive hook paths
 
 Out of scope:
-- hook integration (wiring into pre-commit)
-- immune response (GT9)
+- implementing the full immune-response layer (GT10)
 - meta self-consistency (GT11)
-- resolving D18 or D19
+- resolving D18 (enforcement source location) or D19 (shell vs compiled)
 
 ## Success Condition
 
-- Cross-constraint invalidation is tested rather than assumed (GT8c acceptance).
-- Removing a future from the resulting composition retires it cleanly from subsequent checks (GT8c acceptance).
+- One mechanism is chosen with recorded reasons (GT9 acceptance).
+- Mechanical edge cases discovered during testing are captured in the design (GT9 acceptance).
+- Rewrite-sensitive hook paths are explicitly covered (GT9 acceptance).
 
 ## Stress Test
 
-- Does it reject a commit that advances past while breaking a future's grounding?
-- Does it accept a commit that advances past and simultaneously re-grounds the future?
-- Does it handle removing a future submodule cleanly (retirement)?
-- Does it reject when schema validation fails but individual checks would pass?
-- Does it report all violations, not just the first?
-- Does it pass when all constraints are satisfied simultaneously?
+- Does auto-revert from post-commit produce a clean revert commit?
+- Does auto-revert from post-merge work (merge commits have multiple parents)?
+- Does post-rewrite fire after `git commit --amend`? After `git rebase`?
+- Can a determined operator chain bypasses faster than the response? What is the exposure window?
+- What happens if the revert itself triggers the post-commit hook recursively?
+- Is the chosen mechanism visible and auditable in `git log`?
 
 ## Audit Target
 
-- Evaluator calls GT7, GT8a, GT8b checks in sequence
-- Cross-constraint failure (past advance + stale future) produces a rejection
-- Future retirement does not produce false positives
-- Error output is actionable: identifies which check failed and why
+- D15 is closed with a concrete mechanism choice
+- Edge cases from empirical testing are recorded in decisions.md
+- post-commit, post-merge, and post-rewrite are all covered
+- Recursion/re-entrancy is addressed (response hook doesn't infinite-loop)
 
 ## Verification
 
-- Run evaluator against composition where past advances and future is re-grounded → exit 0
-- Run evaluator against composition where past advances but future is stale → exit non-zero
-- Run evaluator against composition with a retired future → exit 0
-- Run evaluator against composition with schema violation → exit non-zero
-- Run evaluator against clean composition (all constraints met) → exit 0
+- D15 status changes from OPEN to CLOSED in decisions.md
+- The chosen mechanism's behavior is described for all three hook paths
+- At least one edge case from empirical testing is documented
+- The decisions.md risk entry for "Post-hook revert mechanics" is updated with findings

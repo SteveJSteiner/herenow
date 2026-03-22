@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT7 — Role parser and static config validation**
+**GT9 — Immune-response design closure**
 
-GT4 is complete: D6-PATHS closed (flat paths), `.gitmodules` schema specified with six static validation rules. GT6 is complete: bootstrap works. GT7 can now implement the parser/validator against the schema specification in `decisions.md` §3.2 without ambiguity. GT7 unblocks GT8a (past monotonicity) and GT8b (grounded futures).
+GT8c is complete: the atomic cross-check evaluator (`.now/src/check-composition.sh`) composes schema validation, past monotonicity, and future grounding into a single pass/fail gate with 20 tests. The constraint engine v1 is done. GT9 decides the post-detection response mechanism (D15) — what happens when a `--no-verify` bypass is detected by the non-bypassable post-hooks. GT9 unblocks GT10 (implement immune response). GT11 (meta self-consistency) is also unblocked by GT8c and can proceed independently.
