@@ -1,0 +1,25 @@
+#!/bin/sh
+# pre-merge-commit — Governance gate: block invalid compositions before merge commit.
+#
+# Runs check-composition.sh against the candidate merge state. Non-zero exit
+# blocks the merge commit and shows which constraints failed.
+#
+# GT13: Pre-merge-commit enforcement.
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$HOOK_DIR/../src" && pwd)"
+
+. "$SRC_DIR/immune-response.sh"
+
+# Skip during auto-revert.
+if membrane_guard_active; then
+    exit 0
+fi
+
+# No .gitmodules = no submodules = clean composition.
+if [ ! -f "$REPO_ROOT/.gitmodules" ]; then
+    exit 0
+fi
+
+# Run constraint evaluator.
+sh "$EVALUATOR" "$REPO_ROOT/.gitmodules"

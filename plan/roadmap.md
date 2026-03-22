@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT13 — End-to-end fixture repo and smoke scenarios**
+**GT14 — GitHub template packaging**
 
-GT12 is complete: worktree provisioner implemented and tested (34/34 assertions). All three GT13 dependencies are now met — GT10 (immune response), GT11 (meta self-consistency), GT12 (worktree provisioning). GT13 is the integration gate before packaging (GT14) and fresh-repo acceptance (GT15).
+GT13 is complete: end-to-end smoke test passes (29/29 assertions) with pre-commit/pre-merge-commit hooks, all existing suites still green (133 total). Both GT14 dependencies are met — GT2 (initializer UX contract) and GT13 (integration gate). GT14 packages the scaffold repo for the "Use this template" flow.

@@ -1,0 +1,25 @@
+#!/bin/sh
+# pre-commit — Governance gate: block invalid compositions before commit.
+#
+# Runs check-composition.sh against the candidate state. Non-zero exit
+# blocks the commit and shows which constraints failed.
+#
+# GT13: Pre-commit enforcement.
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$HOOK_DIR/../src" && pwd)"
+
+. "$SRC_DIR/immune-response.sh"
+
+# Skip during auto-revert (revert restores valid state).
+if membrane_guard_active; then
+    exit 0
+fi
+
+# No .gitmodules = no submodules = clean composition.
+if [ ! -f "$REPO_ROOT/.gitmodules" ]; then
+    exit 0
+fi
+
+# Run constraint evaluator. Output flows to user so they see which check failed.
+sh "$EVALUATOR" "$REPO_ROOT/.gitmodules"
