@@ -12,75 +12,80 @@
 
 ## Task Identity
 
-- **Node ID:** GT8a
-- **Title:** Constraint engine v1: past monotonicity
+- **Node ID:** GT8b
+- **Title:** Constraint engine v1: grounded futures
 - **Status:** READY
 
 ## Why now
 
-GT7 is complete — the `.gitmodules` parser/validator exists at `.now/src/validate-gitmodules.sh`, passing all 26 tests (6 static schema rules, error message checks, edge cases). GT8a and GT8b are both unblocked. GT8a is taken first because the monotonic-past check is simpler (single `git merge-base --is-ancestor` call) and GT8b (grounded futures) will reuse the same check infrastructure.
+GT8a is complete — `.now/src/check-past-monotonicity.sh` implements the monotonic-past check, passing all 11 tests (valid advancement, newly added, non-past ignored, backward/sideways rejection, mixed multi-submodule, error message content). GT8b is now unblocked. GT8b shares infrastructure patterns with GT8a (submodule name parsing, gitlink extraction from index) and is the other prerequisite for GT8c (atomic cross-check pass).
 
 ## Dependencies
 
-- GT7 output: `.now/src/validate-gitmodules.sh` (parser for role descriptors from `.gitmodules`)
-- `decisions.md` §4.1 (D8: past pins advance monotonically — `git merge-base --is-ancestor <old-pin> <new-pin>`)
-- `decisions.md` §4.3 (D11: atomic consistency at commit time — the checker evaluates the full resulting configuration)
-- `roadmap.md` GT8a acceptance criteria
+- GT7 output: `.now/src/validate-gitmodules.sh` (role and ancestor-constraint lookup)
+- GT8a output: `.now/src/check-past-monotonicity.sh` (structural pattern reference — same parsing, same gitlink extraction)
+- `decisions.md` §4.2 (D9: futures must be grounded in a named past — `git merge-base` fork-point check)
+- `decisions.md` §4.2 (D10: fork point need not be current past tip — "descended from somewhere on past's line")
+- `decisions.md` §4.3 (D11: atomic consistency — checker evaluates the full resulting configuration)
+- `roadmap.md` GT8b acceptance criteria
 
 ## Output Files
 
-- Monotonic-past check implementation (likely `.now/src/check-past-monotonicity.sh` or integrated into a constraint engine entry point)
-- Fixture repos (not fixture files — these checks need actual git history with submodule pins)
-- `continuation.md` (refresh state while GT8a remains active)
+- Grounded-future check implementation (likely `.now/src/check-future-grounding.sh`)
+- Fixture repos in `test/gt8b/run.sh` (real git history with submodule pins)
+- `continuation.md` (refresh state while GT8b remains active)
 
 ## Local Context
 
-- GT8a is a C (capability) node. The deliverable is working code, not design.
-- The check compares old-pin vs new-pin for each past-typed submodule: `git merge-base --is-ancestor <old-pin> <new-pin>`.
-- "Old pin" = the past submodule's gitlink SHA in HEAD (the pre-change state).
-- "New pin" = the past submodule's gitlink SHA in the staged index (the candidate state).
-- The validator from GT7 provides the role lookup: which submodules are `past`-typed.
+- GT8b is a C (capability) node. The deliverable is working code, not design.
+- The check verifies each future-typed submodule's pin descends from its declared past's lineage.
+- For each future submodule: get future-pin and past-pin from the index (the candidate composition), find `git merge-base <future-pin> <past-pin>`, verify the fork point is non-trivial (not a root commit).
+- D10: the fork point need not be the current past tip. A future started from an earlier past state is still valid. The constraint is "descended from somewhere on past's line."
+- Both future-pin and past-pin are read from the index (candidate state), not HEAD. The check evaluates the resulting composition, not the delta.
+- `ancestor-constraint` key in `.gitmodules` names the past submodule each future must descend from.
 - D18 (enforcement location) and D19 (shell vs. compiled) remain open. Continue in POSIX shell.
-- This check will eventually be called from a pre-commit hook, but hook wiring is not GT8a's scope.
 
 ## Scope Boundary
 
 In scope:
-- detect when a past submodule pin moves backward or sideways (non-descendant)
-- compare HEAD gitlink vs index gitlink for each past-typed submodule
-- accept: new pin is descendant of old pin, or submodule is newly added (no old pin)
-- reject: new pin is not a descendant of old pin
-- produce clear error messages identifying which past submodule and the old/new SHAs
-- run against a fixture repo with real git history
+- verify each future submodule's pin descends from its ancestor-constraint past's lineage
+- read both future-pin and past-pin from the index (candidate composition)
+- accept: fork point exists and is not a root commit
+- reject: no common ancestor, or fork point is a root commit (trivial shared history)
+- produce clear error messages identifying which future submodule, its ancestor-constraint, and the pins
+- run against fixture repos with real git history
 
 Out of scope:
-- grounded-future checks (GT8b)
-- cross-constraint atomicity (GT8c)
+- past monotonicity checks (GT8a — already done)
+- cross-constraint atomicity (GT8c — combining GT8a + GT8b)
 - hook integration (wiring into pre-commit)
 - resolving D18 or D19
 
 ## Success Condition
 
-- Fixture repos cover accepted and rejected past-pin transitions (GT8a acceptance).
-- Violating past-pin changes are detected (GT8a acceptance — "rejected before commit" deferred to hook wiring).
+- Fixture repos cover valid and invalid grounding (GT8b acceptance).
+- Grounding checks are evaluated from the candidate resulting composition (GT8b acceptance).
 
 ## Stress Test
 
-- Does it handle a past submodule being added for the first time (no old pin)?
-- Does it handle a past pin advancing to a direct descendant (should accept)?
-- Does it handle a past pin moving to a sibling branch (should reject)?
-- Does it handle a past pin moving backward (should reject)?
-- Does it handle multiple past submodules where one advances validly and one regresses?
+- Does it handle a future forked from an early past commit (not the tip)?
+- Does it handle a future forked from the current past tip?
+- Does it handle a future with no shared history with its past (completely unrelated)?
+- Does it handle a future whose only shared ancestor is the root commit?
+- Does it handle multiple futures grounded in different pasts?
+- Does it handle a future whose past submodule has no pin in the index?
 
 ## Audit Target
 
-- Monotonic check produces correct accept/reject on fixture repos
-- Error messages identify the failing submodule and the old/new SHAs
-- The check uses `git merge-base --is-ancestor` as specified in §4.1
+- Grounding check produces correct accept/reject on fixture repos
+- Error messages identify the failing future, its ancestor-constraint, and the relevant SHAs
+- The check uses `git merge-base` as specified in §4.2
+- Both pins are read from the index (candidate composition), not HEAD
 
 ## Verification
 
-- Run check against fixture repo with valid past advancement → exit 0, no errors
-- Run check against fixture repo with backward past pin → exit non-zero, error message names the violation
-- Run check against fixture repo with sideways past pin → exit non-zero
-- Run check against fixture repo with newly added past (no old pin) → exit 0
+- Run check against fixture repo with future forked from past lineage → exit 0
+- Run check against fixture repo with future forked from past tip → exit 0
+- Run check against fixture repo with unrelated future → exit non-zero, error message names the violation
+- Run check against fixture repo with root-only shared ancestor → exit non-zero
+- Run check against fixture repo with multiple valid futures → exit 0
