@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT9 — Immune-response design closure**
+**GT10 — Implement immune-response layer**
 
-GT8c is complete: the atomic cross-check evaluator (`.now/src/check-composition.sh`) composes schema validation, past monotonicity, and future grounding into a single pass/fail gate with 20 tests. The constraint engine v1 is done. GT9 decides the post-detection response mechanism (D15) — what happens when a `--no-verify` bypass is detected by the non-bypassable post-hooks. GT9 unblocks GT10 (implement immune response). GT11 (meta self-consistency) is also unblocked by GT8c and can proceed independently.
+GT9 is complete: D15 is closed with a hybrid auto-revert + tag-and-refuse-next mechanism, empirically tested across post-commit, post-merge, and post-rewrite paths. GT10 implements the response layer using the design settled in D15. GT11 (meta self-consistency) is also unblocked by GT8c and can proceed independently.

@@ -345,15 +345,25 @@ The enforcement has two layers:
 
 **Decision [D14 — CLOSED]:** Two-layer enforcement. Gate + non-bypassable detection. Normal operation hits the gate and never needs the immune-response path. Bypass detection is mandatory, including rewrite-sensitive paths when rebase/amend workflows are permitted.
 
-**Decision [D15 — OPEN]:** What exactly the immune response does once detection fires. The architecture commits to automatic post-event detection and bounded exposure; it does not yet commit to a single corrective mechanism.
+**Decision [D15 — CLOSED]:** The immune response uses a hybrid mechanism: **auto-revert where mechanically sound, tag-and-refuse-next where auto-revert is fragile**. Empirical testing (GT9) confirmed the following per-hook behavior:
 
-Candidate mechanisms under D15:
+- **`post-commit` (normal operation):** Auto-revert via `git revert --no-edit HEAD`. Produces a clean revert commit immediately after the violation. Visible in `git log`. Confirmed working.
+- **`post-commit` (during active rebase):** Defer. Auto-revert during rebase breaks the rebase operation mid-replay. Detected via presence of `.git/rebase-merge/` or `.git/rebase-apply/`. The `post-rewrite` hook handles detection after the rebase completes.
+- **`post-merge` (fast-forward):** Auto-revert via `git revert --no-edit HEAD`. Works identically to post-commit.
+- **`post-merge` (true merge commit):** Auto-revert via `git revert --no-edit -m 1 HEAD`. The `-m 1` flag specifies the mainline parent for the revert.
+- **`post-merge` (conflict-resolved merge):** Not reached — conflict-resolved merges fire `post-commit`, not `post-merge`. Handled by the post-commit path.
+- **`post-rewrite` (amend):** Check for coordination marker (`MEMBRANE_VIOLATION_HANDLED`). If present, skip — `post-commit` already handled it. `git commit --amend` fires both `post-commit` and `post-rewrite`; the post-commit hook is the primary handler for amend violations.
+- **`post-rewrite` (rebase):** Tag-and-refuse-next via `git tag membrane/violation/<short-sha> HEAD`. Mid-history auto-revert after rebase is fragile (violating commits may be mid-history, not at HEAD). The violation tag is durable and conspicuous; the next governed operation can check for it.
 
-- **Auto-revert:** A post-event hook immediately creates a revert commit. Strongest response, but reverting inside a post-hook is mechanically unusual and may have edge cases.
-- **Tag + refuse-next:** Tag the violation. The next governed operation checks parent and refuses to proceed. Simpler, but a determined operator can keep chaining bypasses, though each violation remains conspicuous.
-- **Tag + degrade:** Tag and log. Subsequent operations run in degraded mode with warnings. Softest response.
+Recursion guard: all hooks share a single guard file (`MEMBRANE_REVERTING` in the git directory). When any hook is creating a revert commit, the guard prevents other hooks from re-entering the response path. The revert commit created by the hook fires `post-commit` again; the guard file causes the re-entrant invocation to exit immediately.
 
-Current leaning is auto-revert if mechanically sound. This needs empirical testing across git versions and across post-commit, post-merge, and post-rewrite paths.
+Coordination between `post-commit` and `post-rewrite` for amend: `post-commit` replaces the guard file with a `MEMBRANE_VIOLATION_HANDLED` marker after completing its revert. `post-rewrite` checks for this marker and skips if present, then removes the marker.
+
+Rationale for hybrid over pure auto-revert: auto-revert is the strongest response (immediate, automatic, visible) but is mechanically unsound in two scenarios — mid-rebase (breaks the rebase) and mid-history after rebase (fragile). Tag-and-refuse-next covers these cases with acceptable tradeoff: the violation persists until the next governed operation, but remains conspicuous and auditable.
+
+Rationale against pure tag-and-refuse-next: weaker than auto-revert for the common case. A determined operator can chain `--no-verify` commits without triggering refuse-next if they never run a governed operation. Auto-revert closes the exposure window to zero for the common case (single commit, single merge).
+
+Rationale against tag-and-degrade: too soft. Degraded mode with warnings is ignorable. The system's posture is that violations are structural events, not warnings.
 
 ### 5.2 Where the enforcement source lives
 
@@ -539,7 +549,7 @@ The following are not open decisions awaiting a resolution so much as areas wher
 
 **Scale of constraint logic.** The constraint set is currently small: monotonic past, grounded futures, meta self-consistency. If domain-specific constraints accumulate (strength bounds per past branch, content-type constraints per future, inter-future coherence conditions), the enforcement logic may outgrow whatever language it starts in. The shell-to-Rust migration path is designed to handle this, but the threshold is unknown.
 
-**Post-hook revert mechanics.** The immune-response layer relies on `post-merge` and `post-commit` being able to meaningfully respond to violations. Whether auto-revert inside a post-hook is reliable across git versions, merge types, and edge cases is untested. If it isn't reliable, the design falls back to tag-and-refuse, which is weaker.
+**Post-hook revert mechanics.** Empirically tested (GT9). Auto-revert from `post-commit` and `post-merge` is mechanically reliable: `git revert --no-edit HEAD` produces a clean revert commit, the recursion guard prevents infinite loops, and merge commits are handled via `-m 1`. Two scenarios where auto-revert is unsound: (1) during active rebase, creating a revert commit mid-replay breaks the rebase operation — the hook must detect rebase-in-progress and defer; (2) after rebase completes, violating commits may be mid-history and not at HEAD, making targeted revert fragile. These cases fall back to tag-and-refuse-next. Additional edge cases: `git commit --amend` fires both `post-commit` and `post-rewrite`, requiring a coordination marker to prevent double-revert; conflict-resolved merges fire `post-commit` rather than `post-merge`, so the post-commit handler must also detect merge commits (check `HEAD^2`). The remaining open risk is `core.hooksPath` manipulation, which bypasses all hooks including post-hooks — this is a config-level escape hatch addressable by GT11 (meta self-consistency), not by the hook layer itself.
 
 **Agent interaction.** The architecture is designed for a world where coding agents (Claude Code, Codex) are the primary operators within submodules. Whether agents naturally respect the hook-governed workflow — or whether they attempt `--no-verify` by default, or modify hook files, or otherwise interact badly with the enforcement layer — depends on agent behavior that may change.
 
@@ -565,7 +575,7 @@ The following are not open decisions awaiting a resolution so much as areas wher
 | D12 | OPEN | 4.4 | Meta self-consistency check mechanism |
 | D13 | OPEN | 4.5 | Single vs. multiple past branches |
 | D14 | CLOSED | 5.1 | Two-layer enforcement: gate + non-bypassable detection |
-| D15 | OPEN | 5.1 | Immune response behavior |
+| D15 | CLOSED | 5.1 | Immune response: hybrid auto-revert + tag-and-refuse-next |
 | D16 | CLOSED | 5.2 | Hook launchers in POSIX shell |
 | D17 | CLOSED | 5.2 | Source is authority, binary is cache |
 | D18 | OPEN | 5.2 | Enforcement source on now vs. in meta |
