@@ -1,0 +1,60 @@
+#!/bin/sh
+# post-rewrite — Immune-response hook for amend and rebase.
+#
+# Git passes the rewrite cause as $1: "amend" or "rebase".
+#
+# Behavior per D15:
+#   Amend:   check MEMBRANE_VIOLATION_HANDLED marker — if present, post-commit
+#            already handled it, so skip and clean up marker. If absent (no
+#            violation was found by post-commit), run detection ourselves.
+#   Rebase:  tag-and-refuse-next. Auto-revert after rebase is fragile because
+#            violating commits may be mid-history, not at HEAD.
+#
+# GT10: Immune-response layer.
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$HOOK_DIR/../src" && pwd)"
+
+. "$SRC_DIR/immune-response.sh"
+
+_cause="${1:-}"
+
+# Exit immediately if recursion guard is active.
+if membrane_guard_active; then
+    exit 0
+fi
+
+case "$_cause" in
+    amend)
+        # Coordination with post-commit: if it already handled the violation,
+        # the marker is present. Clean up and exit.
+        if membrane_handled_check; then
+            membrane_handled_clear
+            exit 0
+        fi
+        # post-commit didn't find a violation (or didn't fire). Check ourselves.
+        # This covers edge cases where post-commit was somehow skipped.
+        if membrane_check_violation; then
+            exit 0
+        fi
+        # Violation found by post-rewrite but not by post-commit. Auto-revert.
+        membrane_auto_revert
+        ;;
+    rebase)
+        # After rebase completes, check the final state.
+        if membrane_check_violation; then
+            exit 0
+        fi
+        # Violation detected post-rebase. Tag, don't auto-revert.
+        membrane_tag_violation
+        ;;
+    *)
+        # Unknown cause — run detection as a safety net.
+        if membrane_check_violation; then
+            exit 0
+        fi
+        membrane_tag_violation
+        ;;
+esac
+
+exit 0

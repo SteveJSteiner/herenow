@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT10 — Implement immune-response layer**
+**GT11 — Meta self-consistency mechanism**
 
-GT9 is complete: D15 is closed with a hybrid auto-revert + tag-and-refuse-next mechanism, empirically tested across post-commit, post-merge, and post-rewrite paths. GT10 implements the response layer using the design settled in D15. GT11 (meta self-consistency) is also unblocked by GT8c and can proceed independently.
+GT10 is complete: immune-response layer implemented and tested (15/15 assertions across 8 scenarios). GT11 is unblocked by GT8c and on the critical path to GT13. It closes D12 (OPEN — meta self-consistency verification mechanism). GT12 (worktree provisioning) is independently unblocked by GT3 and can proceed in parallel.

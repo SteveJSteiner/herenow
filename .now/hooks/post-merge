@@ -1,0 +1,44 @@
+#!/bin/sh
+# post-merge — Immune-response hook for merges.
+#
+# Behavior per D15:
+#   Fast-forward merge:       detect violation → auto-revert HEAD
+#   True merge (--no-ff):     detect violation → auto-revert -m 1 HEAD
+#   Conflict-resolved merge:  not reached (fires post-commit instead)
+#
+# Git passes a squash flag ($1): "0" = normal merge, "1" = squash merge.
+# Squash merges don't create a commit (user commits later → post-commit handles).
+#
+# GT10: Immune-response layer.
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$HOOK_DIR/../src" && pwd)"
+
+. "$SRC_DIR/immune-response.sh"
+
+# Squash flag from git.
+_squash_flag="${1:-0}"
+
+# Exit immediately if recursion guard is active.
+if membrane_guard_active; then
+    exit 0
+fi
+
+# Squash merge: no commit yet, post-commit will handle when user commits.
+if [ "$_squash_flag" = "1" ]; then
+    exit 0
+fi
+
+# Run constraint evaluator. Exit 0 = clean.
+if membrane_check_violation; then
+    exit 0
+fi
+
+# Violation detected. Determine if this is a merge commit (--no-ff) or ff.
+if membrane_is_merge_commit; then
+    membrane_auto_revert "-m 1"
+else
+    membrane_auto_revert
+fi
+
+exit 0

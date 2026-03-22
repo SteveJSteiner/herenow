@@ -1,0 +1,41 @@
+#!/bin/sh
+# post-commit — Immune-response hook for commits and amend.
+#
+# Behavior per D15:
+#   Normal commit:  detect violation → auto-revert HEAD
+#   During rebase:  defer (post-rewrite handles after rebase completes)
+#   Amend:          same as normal commit; sets coordination marker for post-rewrite
+#
+# Recursion guard prevents re-entry when the revert commit fires post-commit again.
+#
+# GT10: Immune-response layer.
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$(cd "$HOOK_DIR/../src" && pwd)"
+
+. "$SRC_DIR/immune-response.sh"
+
+# Exit immediately if recursion guard is active (we are mid-revert).
+if membrane_guard_active; then
+    exit 0
+fi
+
+# Defer during active rebase — post-rewrite handles it.
+if membrane_rebase_active; then
+    exit 0
+fi
+
+# Run constraint evaluator. Exit 0 = clean, no response needed.
+if membrane_check_violation; then
+    exit 0
+fi
+
+# Violation detected. Auto-revert.
+# Conflict-resolved merges fire post-commit (not post-merge).
+# Merge commits need -m 1 for revert.
+if membrane_is_merge_commit; then
+    membrane_auto_revert "-m 1"
+else
+    membrane_auto_revert
+fi
+exit 0
