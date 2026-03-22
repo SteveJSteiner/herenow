@@ -39,12 +39,10 @@ GT0 -> GT2
 
 GT1 -> GT3
 GT1 -> GT4
-GT1 -> GT5
 
 GT2 -> GT3
 GT2 -> GT14
 
-GT3 -> GT5
 GT3 -> GT6
 GT3 -> GT12
 
@@ -145,15 +143,6 @@ GT15 -> GT16
   - path policy decision
 - **Acceptance:**
   - The schema is concrete enough that parser and validators can be implemented without guesswork.
-
-### GT5 — Generate starter planning files and front matter
-- **Kind:** C
-- **Depends on:** GT1, GT3
-- **Goal:** Automatically create all five planning files (`requirements.md`, `decisions.md`, `roadmap.md`, `continuation.md`, `completion-log.md`) in `plan/` on `now` with the correct protocol headers and minimal starter content (per D27).
-- **Acceptance:**
-  - Init generates all five files in `plan/` on the `now` branch.
-  - Each file carries the protocol header contract defined in §2.4 of `decisions.md`.
-  - The initial `continuation.md` points at the first unfinished node rather than free text.
 
 ### GT6 — Bootstrap governed now-branch environment
 - **Kind:** C

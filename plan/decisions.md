@@ -202,7 +202,7 @@ Each file carries a protocol header specifying its purpose, authority, must-cont
 
 **Decision [D27 — CLOSED]:** Planning files live on `now` in `plan/`. They are operational metadata permitted by R3, not domain payload. They describe the project's compositional intent and execution state — properties of the present. Placing them on `now` keeps them directly visible on the primary working surface. Placing them on `meta` was considered but rejected: meta's role is enforcement machinery and tooling, not project management. The planning files are about what the present is doing; meta is about how the present governs itself.
 
-The front-matter contract for each file is stable enough for GT5 to generate starter versions with the correct protocol headers automatically. The initializer creates all five files with protocol headers and minimal starter content.
+The front-matter contract for each file is defined here as a design reference. Whether an initialized repository generates starter planning files is outside the template's scope — the planning methodology is an operator concern, not a template deliverable.
 
 ---
 
