@@ -319,7 +319,11 @@ This means past and future pins cannot always be updated independently. Advancin
 
 The now branch can verify that its currently active enforcement machinery matches the version declared by its meta submodule pin. The simplest check is hash comparison between the active hooks/source and the corresponding files at the meta pin's SHA.
 
-**Decision [D12 — OPEN (mechanism)]:** Self-consistency between active machinery and declared meta is a requirement. The exact verification mechanism (byte-identity of hook files, hash of source tree, or something else) is not yet determined. The concern is that byte-identity may be too rigid (formatting changes, platform line-ending differences) while hash comparison may be too opaque. This needs practical testing.
+**Decision [D12 — CLOSED]:** The meta self-consistency mechanism is per-file blob-hash comparison using an enforcement manifest. The meta branch carries an `enforcement-manifest` file listing each enforcement file path and its expected git blob hash. The checker (`check-meta-consistency.sh`) reads the manifest from the meta pin's tree via `git show` (no submodule init required), computes `git hash-object` of each active working-tree enforcement file, and reports per-file mismatches.
+
+This resolves the byte-identity vs tree-hash tension: per-file granularity avoids the opacity of a single tree hash (each mismatch is individually identified with path and hash details), while git blob hashing provides deterministic content comparison. Line-ending normalization is delegated to `.gitattributes`, which is the standard git mechanism for cross-platform consistency — the checker compares raw file bytes as they exist on disk, matching how git itself computes blob hashes. If cross-platform line-ending consistency is required, configure `.gitattributes` with appropriate `eol` settings. The manifest is human-readable and diff-able via `git log -p` on the meta branch.
+
+Practical testing (GT11) confirmed: modified hooks and source files are detected, clean states produce no false positives, advancing the meta pin to a new SHA with identical manifest content passes, advancing to a SHA with different manifest content fails, and the check works entirely through git objects without submodule initialization.
 
 ### 4.5 Multiple past branches
 
@@ -572,7 +576,7 @@ The following are not open decisions awaiting a resolution so much as areas wher
 | D9 | CLOSED | 4.2 | Futures must descend from named past |
 | D10 | CLOSED | 4.2 | Fork point need not be current past tip |
 | D11 | CLOSED | 4.3 | Atomic consistency of configurations |
-| D12 | OPEN | 4.4 | Meta self-consistency check mechanism |
+| D12 | CLOSED | 4.4 | Meta self-consistency check mechanism |
 | D13 | OPEN | 4.5 | Single vs. multiple past branches |
 | D14 | CLOSED | 5.1 | Two-layer enforcement: gate + non-bypassable detection |
 | D15 | CLOSED | 5.1 | Immune response: hybrid auto-revert + tag-and-refuse-next |

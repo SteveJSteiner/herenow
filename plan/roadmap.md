@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT11 — Meta self-consistency mechanism**
+**GT12 — Worktree provisioning and operator ergonomics**
 
-GT10 is complete: immune-response layer implemented and tested (15/15 assertions across 8 scenarios). GT11 is unblocked by GT8c and on the critical path to GT13. It closes D12 (OPEN — meta self-consistency verification mechanism). GT12 (worktree provisioning) is independently unblocked by GT3 and can proceed in parallel.
+GT11 is complete: meta self-consistency mechanism implemented and tested (10/10 assertions). D12 closed — per-file blob-hash comparison using enforcement manifest on meta branch. GT12 is unblocked by GT3 and is the last dependency for GT13 (end-to-end smoke).

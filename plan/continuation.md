@@ -12,86 +12,71 @@
 
 ## Task Identity
 
-- **Node ID:** GT11
-- **Title:** Meta self-consistency mechanism
+- **Node ID:** GT12
+- **Title:** Worktree provisioning and operator ergonomics
 - **Status:** READY
 
 ## Why now
 
-GT10 is complete — the immune-response layer is implemented and tested across all hook paths. GT11 is unblocked by GT8c and is on the critical path to GT13 (end-to-end smoke), which requires GT10 + GT11 + GT12.
-
-GT11 closes D12 (OPEN — mechanism for meta self-consistency verification). The decision text says this "needs practical testing" — GT11 is that practical testing. The current enforcement source lives on `now` in `.now/src/` and `.now/hooks/`. The meta submodule is declared in `.gitmodules`. GT11 must determine what "active enforcement matches declared meta state" means concretely and implement the first check.
-
-GT12 (worktree provisioning) is independently unblocked by GT3 and can proceed in parallel.
+GT11 is complete — meta self-consistency mechanism implemented and tested (10/10 assertions, D12 closed). GT12 is unblocked by GT3 (init.sh creates the branch structure that worktrees attach to). GT12 is the last dependency for GT13 (end-to-end smoke), which requires GT10 + GT11 + GT12.
 
 ## Dependencies
 
-- GT8c output: `.now/src/check-composition.sh` (the evaluator — GT11 adds a meta-consistency check to this suite or alongside it)
-- D12 (OPEN): self-consistency between active machinery and declared meta is a requirement; mechanism not yet decided
-- D18 (OPEN): whether enforcement source lives on now or in meta — affects what "declared meta state" means
-- Current enforcement source: `.now/src/*.sh`, `.now/hooks/*` — all on the `now` branch
-- Meta submodule: declared in `.gitmodules` with `role = meta`, pinned to a SHA on the `meta` branch
-- GT3 output: `init.sh` creates the `meta` branch with initial content
+- GT3 output: `init.sh` creates `now`, `meta`, and `provenance/scaffold` branches — the branches that worktrees will be created from
+- D6-PATHS (CLOSED): submodule paths are flat at repo root, role in the key not the path
+- D3-LAYOUT (CLOSED): `.now/` is the enforcement namespace, `plan/` is the planning namespace
+- Current branch structure: `now`, `meta`, `main`, `provenance/scaffold`
 
 ## Output Files
 
-- `.now/src/check-meta-consistency.sh` (or equivalent) — the self-consistency checker
-- Update to `.now/src/check-composition.sh` if meta-consistency is added to the constraint suite
-- Decision closure for D12 in `decisions.md`
-- Test script validating consistency detection
-- `continuation.md` (refresh state while GT11 remains active)
+- Worktree provisioning script (e.g., `.now/src/provision-worktrees.sh` or a subcommand in `bootstrap.sh`)
+- Test script validating worktree creation and safety
+- `continuation.md` (refresh state while GT12 remains active)
 
 ## Local Context
 
-- GT11 is a C node. The deliverable is working code with tests.
-- D12 is OPEN with two candidate mechanisms: byte-identity of files, or hash of source tree. The concern is that byte-identity is too rigid (line endings, formatting) while hash comparison is too opaque.
-- D18 is OPEN: enforcement source on now vs. meta. Currently the source IS on now. GT11 should work with the current reality (source on now) while keeping the design compatible with either D18 outcome.
-- The meta submodule pin on `now` points to a SHA on the `meta` branch. The `meta` branch was created by `init.sh` (GT3). Its content represents the declared operational state.
-- The check needs to answer: "does the active enforcement machinery match what the meta pin says it should be?"
-- If source is on now: the meta pin might declare which version of enforcement is expected, and the check compares active files against that declaration.
-- If source is in meta: the meta pin points to the tree containing the enforcement source, and the check compares active files against the tree at that pin.
-- Platform concern: line endings, executable bits, and filesystem metadata can differ across platforms. The mechanism must handle this or document exact assumptions.
+- GT12 is a C node. The deliverable is working code with tests.
+- Worktrees are an ergonomic layer. The command must be safe to skip — worktrees are convenience, not a hidden dependency for enforcement.
+- Standard worktrees: one for `now`, one for `meta`, at least one `past`, at least one `future`. The exact past/future branches depend on what `init.sh` created and what submodules exist.
+- Worktrees should be created at conventional locations relative to the repo root. The provisioner reads `.gitmodules` to discover which branches/roles exist.
+- The provisioner should be idempotent: re-running does not break existing worktrees.
+- Edge cases: what if a worktree already exists at the target path? What if the branch doesn't exist? What if the user has uncommitted changes in an existing worktree?
 
 ## Scope Boundary
 
 In scope:
-- Close D12 with a concrete mechanism, informed by practical testing
-- Implement the self-consistency checker
-- Test with controlled mismatch scenarios
-- Handle or document platform variation (line endings, exec bits)
-- Integrate with the constraint suite if appropriate
+- Implement worktree provisioning command
+- Create worktrees for now, meta, and any declared past/future submodule branches
+- Idempotent operation (safe to re-run)
+- Test with controlled scenarios
 
 Out of scope:
-- Closing D18 (enforcement source location) — GT11 works with current reality
-- Closing D19 (source language) — GT11 uses shell, consistent with current codebase
-- Worktree provisioning (GT12)
+- Enforcement changes (GT10/GT11 complete)
 - End-to-end smoke scenarios (GT13)
+- GitHub template packaging (GT14)
 
 ## Success Condition
 
-- A controlled mismatch between active enforcement and declared meta state is detectable (GT11 acceptance).
-- The mechanism is stable across normal line-ending/platform variation or else documents exact platform assumptions (GT11 acceptance).
+- Standard worktrees for `now`, one `meta`, and at least one `past` or `future` can be created from the initialized repo (GT12 acceptance).
+- The command is safe to skip; worktrees remain an ergonomic layer, not a hidden dependency (GT12 acceptance).
 
 ## Stress Test
 
-- Does a modified hook file get detected as inconsistent?
-- Does a modified enforcement source file get detected as inconsistent?
-- Does a clean state (no modifications) pass the consistency check?
-- Does advancing the meta pin to a new SHA with matching content pass?
-- Does advancing the meta pin to a new SHA with different content fail?
-- Are line-ending differences handled (or explicitly documented as a known limitation)?
-- Does the check work when the meta submodule is not initialized (reading from git objects directly)?
+- Does the provisioner create worktrees for all declared submodule branches?
+- Is the provisioner idempotent (re-run doesn't break existing worktrees)?
+- Does it handle missing branches gracefully?
+- Does it handle already-existing worktrees gracefully?
+- Does it work immediately after `init.sh` on a fresh repo?
+- Can enforcement operate correctly without worktrees being provisioned?
 
 ## Audit Target
 
-- Self-consistency checker exists and is executable
-- Controlled mismatch produces a clear violation report
-- Clean state produces no false positives
-- D12 is closed in `decisions.md` with recorded mechanism and rationale
-- Platform assumptions are documented if not fully handled
+- Provisioner script exists and is executable
+- Worktrees are created at conventional locations
+- Re-running does not produce errors or break existing state
+- Enforcement works with and without worktrees
 
 ## Verification
 
-- Test script exercises match and mismatch scenarios with pass/fail assertions
-- Mismatch is detected without false positives on clean state
-- D12 closure is recorded in `decisions.md`
+- Test script exercises creation, idempotence, and edge cases with pass/fail assertions
+- Manual verification that enforcement hooks still work without worktrees
