@@ -292,6 +292,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT3 — Create common-root membrane topology in a generated repo**
+**GT7 — Role parser and static config validation**
 
-GT2 is resolved: the initializer command contract (D28), provenance preservation policy (D29), marker-based idempotence model (D30), and local-only scope boundary (D31) are settled in `decisions.md` §7. GT1 was already resolved (D3-LAYOUT, D24–D27). GT3 can now implement the initializer against the specified eight-step contract without hidden product decisions.
+GT4 is complete: D6-PATHS closed (flat paths), `.gitmodules` schema specified with six static validation rules. GT6 is complete: bootstrap works. GT7 can now implement the parser/validator against the schema specification in `decisions.md` §3.2 without ambiguity. GT7 unblocks GT8a (past monotonicity) and GT8b (grounded futures).

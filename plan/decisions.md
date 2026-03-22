@@ -110,7 +110,7 @@ The initialized repository uses the following branch namespace:
 - **`meta`** — operational self-governance. Singular until a concrete use case for multiple meta branches emerges.
 - **`provenance/scaffold`** — the pre-init GitHub template history. Not part of the membrane topology (see §1.5).
 
-**Decision [D24 — CLOSED]:** Branch names use role-based namespaces: `past/`, `future/`, `provenance/`. `now` and `meta` are bare names. This makes role visible in `git branch` output and ref listings without requiring extra metadata lookup. The namespace convention applies to branch names in `refs/heads/`; submodule checkout paths on the now branch tree are a separate question (see D6-PATHS, still open).
+**Decision [D24 — CLOSED]:** Branch names use role-based namespaces: `past/`, `future/`, `provenance/`. `now` and `meta` are bare names. This makes role visible in `git branch` output and ref listings without requiring extra metadata lookup. The namespace convention applies to branch names in `refs/heads/`; submodule checkout paths on the now branch tree are flat at the repository root (D6-PATHS).
 
 **Decision [D25 — CLOSED]:** The initialized branch set — what exists immediately after `init` — is `now`, `meta`, and `provenance/scaffold`. Past and future branches are not created at initialization; they are created by the operator when substantive work begins. The initial `.gitmodules` on `now` declares only the `meta` submodule. Past and future submodule entries are added as the operator creates and pins those branches.
 
@@ -170,7 +170,7 @@ plan/
   roadmap.md
   continuation.md
   completion-log.md
-meta/                     # meta submodule checkout (path subject to D6-PATHS for future past/future entries)
+meta/                     # meta submodule checkout (flat path; past/future entries also at root per D6-PATHS)
 .gitmodules               # submodule declarations with custom role keys
 .gitignore                # ignores .now/bin/ and other derived artifacts
 bootstrap.sh              # single bootstrap entry point
@@ -180,11 +180,11 @@ The `.now/` directory is the namespace for enforcement machinery: hook launchers
 
 The `plan/` directory holds all planning and governance documents (see §2.4).
 
-The `meta/` directory is the checkout path for the meta submodule. When past and future submodules are added later, their checkout paths are governed by D6-PATHS (flat vs. hierarchical, still open).
+The `meta/` directory is the checkout path for the meta submodule. When past and future submodules are added later, their checkout paths are flat at the repository root per D6-PATHS — e.g., `rca0/`, `sls/`.
 
 `bootstrap.sh` lives at the now branch root for discoverability — it is the first thing an operator runs after checkout.
 
-**Decision [D3-LAYOUT — CLOSED]:** `.now/` is the enforcement namespace. `plan/` is the planning-file namespace. `bootstrap.sh` is at root. The layout accommodates both D18 outcomes (enforcement source on now vs. in meta) and both D19 outcomes (shell vs. compiled): `.now/src/` and `.now/bin/` appear only when those decisions call for them. Submodule checkout paths for past and future entries remain subject to D6-PATHS.
+**Decision [D3-LAYOUT — CLOSED]:** `.now/` is the enforcement namespace. `plan/` is the planning-file namespace. `bootstrap.sh` is at root. The layout accommodates both D18 outcomes (enforcement source on now vs. in meta) and both D19 outcomes (shell vs. compiled): `.now/src/` and `.now/bin/` appear only when those decisions call for them. Submodule checkout paths for past and future entries are flat at the repository root (D6-PATHS).
 
 ### 2.4 Planning file placement and document contracts
 
@@ -224,18 +224,18 @@ Each submodule carries a machine-readable role in `.gitmodules` using custom key
 
 ```ini
 [submodule "rca0"]
-    path = past/rca0
+    path = rca0
     url = ./
     role = past
 
 [submodule "sls"]
-    path = future/sls
+    path = sls
     url = ./
     role = future
     ancestor-constraint = rca0
 
-[submodule "tools"]
-    path = meta/tools
+[submodule "meta"]
+    path = meta
     url = ./
     role = meta
 ```
@@ -244,7 +244,40 @@ Each submodule carries a machine-readable role in `.gitmodules` using custom key
 
 The `ancestor-constraint` key on future submodules names the past submodule from which the future must descend. This is the link that makes the grounding constraint (§4.2) checkable.
 
-**Decision [D6-PATHS — OPEN]:** Whether submodule paths should reflect their role hierarchically (`past/rca0`, `future/sls`) or be flat (`rca0`, `sls`) with roles only in `.gitmodules`. Hierarchical makes role visible in the filesystem and gives hooks a fast path-prefix heuristic. Flat avoids the implication that role is a directory-level property and, more importantly, avoids disruptive path renames if a future later settles into a past. The practical argument now leans flat more strongly than before, but the decision remains open until the initialization and operator workflow are exercised.
+**Decision [D6-PATHS — CLOSED]:** Flat submodule paths. Checkout paths do not encode role — role lives exclusively in the `.gitmodules` `role` key. A past submodule named `rca0` checks out to `rca0/`, not `past/rca0/`. A future named `sls` checks out to `sls/`, not `future/sls/`.
+
+Rationale: flat paths avoid disruptive renames when a future settles into a past. Under hierarchical paths, settling `future/sls` into `past/sls` requires a submodule path change — updating `.gitmodules`, the index gitlink, and the filesystem location. Under flat paths, settling changes only the `role` key (from `future` to `past`) and removes `ancestor-constraint`. The submodule name, path, and pinned SHA are untouched. Since role is already authoritative in `.gitmodules` (D5), encoding it redundantly in the filesystem path adds no information and creates a rename tax on the most important lifecycle transition.
+
+Convention: submodule name and checkout path should be identical (e.g., `[submodule "rca0"]` with `path = rca0`). This keeps `ancestor-constraint` references unambiguous — the value names both the logical submodule and its filesystem location.
+
+#### `.gitmodules` schema specification
+
+**Required keys for all submodules:**
+
+| Key | Source | Constraint |
+|-----|--------|------------|
+| `path` | git-native | Must equal submodule name. Must not collide with reserved paths (`.now`, `plan`, `bootstrap.sh`, `.gitmodules`, `.gitignore`). |
+| `url` | git-native | Must be `./` (self-referencing, per D4). |
+| `role` | custom | Required. One of: `past`, `future`, `meta`. |
+
+**Additional keys by role:**
+
+| Role | Key | Required | Constraint |
+|------|-----|----------|------------|
+| `future` | `ancestor-constraint` | Yes | Must name an existing `past`-role submodule in the same `.gitmodules`. |
+| `past` | `ancestor-constraint` | Forbidden | Presence is a schema error. |
+| `meta` | `ancestor-constraint` | Forbidden | Presence is a schema error. |
+
+**Validation rules (for GT7 parser/validator):**
+
+1. Every `[submodule]` entry must declare a `role` key with a value in {`past`, `future`, `meta`}.
+2. Every `future` submodule must have an `ancestor-constraint` whose value matches the name of a `past` submodule declared in the same file.
+3. `past` and `meta` submodules must not carry an `ancestor-constraint` key.
+4. `url` must be `./` for all submodules.
+5. `path` must equal the submodule name.
+6. No two submodules may share the same path (git-native guarantee, but validators should not assume it).
+
+These rules are statically checkable from `.gitmodules` alone. The dynamic constraints (monotonic past advancement, grounded future ancestry) are defined in §4 and require git object inspection beyond the config file.
 
 ### 3.3 Submodule independence
 
@@ -523,7 +556,7 @@ The following are not open decisions awaiting a resolution so much as areas wher
 | D3-LAYOUT | CLOSED | 2.3 | Path layout on the now branch |
 | D4 | CLOSED | 3.1 | Self-referencing submodules via relative self-URL |
 | D5 | CLOSED | 3.2 | Role declaration via custom .gitmodules keys |
-| D6-PATHS | OPEN | 3.2 | Hierarchical vs. flat submodule paths |
+| D6-PATHS | CLOSED | 3.2 | Flat submodule paths — role in key, not in path |
 | D7-PROVISIONING | OPEN | 3.3 | How now provisions submodule hooks |
 | D8 | CLOSED | 4.1 | Monotonic past advancement |
 | D9 | CLOSED | 4.2 | Futures must descend from named past |
