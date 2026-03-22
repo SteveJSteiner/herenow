@@ -1,0 +1,10 @@
+[submodule "meta"]
+	path = meta
+	url = ./
+	role = meta
+
+[submodule "sls"]
+	path = sls
+	url = ./
+	role = future
+	ancestor-constraint = ghost

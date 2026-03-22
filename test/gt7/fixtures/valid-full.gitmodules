@@ -1,0 +1,15 @@
+[submodule "meta"]
+	path = meta
+	url = ./
+	role = meta
+
+[submodule "rca0"]
+	path = rca0
+	url = ./
+	role = past
+
+[submodule "sls"]
+	path = sls
+	url = ./
+	role = future
+	ancestor-constraint = rca0

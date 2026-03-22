@@ -1,0 +1,4 @@
+[submodule "meta"]
+	path = meta
+	url = ./
+	role = meta

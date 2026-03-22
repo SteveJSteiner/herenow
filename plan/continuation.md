@@ -12,72 +12,75 @@
 
 ## Task Identity
 
-- **Node ID:** GT7
-- **Title:** Role parser and static config validation
+- **Node ID:** GT8a
+- **Title:** Constraint engine v1: past monotonicity
 - **Status:** READY
 
 ## Why now
 
-GT4 is complete — the `.gitmodules` schema is settled (D6-PATHS closed: flat paths; required keys per role defined; validation rules specified). GT6 is complete — bootstrap works. GT7's two dependencies are satisfied. GT7 implements the parser/validator that all downstream constraint nodes (GT8a, GT8b, GT8c) depend on.
+GT7 is complete — the `.gitmodules` parser/validator exists at `.now/src/validate-gitmodules.sh`, passing all 26 tests (6 static schema rules, error message checks, edge cases). GT8a and GT8b are both unblocked. GT8a is taken first because the monotonic-past check is simpler (single `git merge-base --is-ancestor` call) and GT8b (grounded futures) will reuse the same check infrastructure.
 
 ## Dependencies
 
-- GT4 output: `.gitmodules` schema specification in `decisions.md` §3.2 (D5, D6-PATHS closed, validation rules 1–6)
-- GT6 output: `bootstrap.sh` working, `.now/hooks/` structure, `core.hooksPath` set
-- `decisions.md` §4.2 (D9: futures must descend from named past — informs what `ancestor-constraint` means)
-- `roadmap.md` GT7 acceptance criteria
+- GT7 output: `.now/src/validate-gitmodules.sh` (parser for role descriptors from `.gitmodules`)
+- `decisions.md` §4.1 (D8: past pins advance monotonically — `git merge-base --is-ancestor <old-pin> <new-pin>`)
+- `decisions.md` §4.3 (D11: atomic consistency at commit time — the checker evaluates the full resulting configuration)
+- `roadmap.md` GT8a acceptance criteria
 
 ## Output Files
 
-- Implementation of the parser/validator (location TBD — likely `.now/src/` or `.now/hooks/` depending on D18)
-- Fixture `.gitmodules` files for testing (valid and invalid cases)
-- `continuation.md` (refresh state while GT7 remains active)
+- Monotonic-past check implementation (likely `.now/src/check-past-monotonicity.sh` or integrated into a constraint engine entry point)
+- Fixture repos (not fixture files — these checks need actual git history with submodule pins)
+- `continuation.md` (refresh state while GT8a remains active)
 
 ## Local Context
 
-- GT7 is a C (capability) node. The deliverable is working code, not design.
-- The schema validation rules are in `decisions.md` §3.2: six static checks on `.gitmodules` content.
-- Dynamic constraints (monotonic past, grounded futures) are out of scope — those are GT8a/GT8b.
-- The parser reads `.gitmodules` via `git config --file .gitmodules --get-regexp`.
-- The meta submodule is the only entry in `.gitmodules` at initialization. Past/future entries are added by operators later.
-- D18 (enforcement source on now vs. in meta) and D19 (shell vs. compiled) are still open. The parser should start as shell to match D16/D22 (POSIX shell launchers, shell bootstrap).
+- GT8a is a C (capability) node. The deliverable is working code, not design.
+- The check compares old-pin vs new-pin for each past-typed submodule: `git merge-base --is-ancestor <old-pin> <new-pin>`.
+- "Old pin" = the past submodule's gitlink SHA in HEAD (the pre-change state).
+- "New pin" = the past submodule's gitlink SHA in the staged index (the candidate state).
+- The validator from GT7 provides the role lookup: which submodules are `past`-typed.
+- D18 (enforcement location) and D19 (shell vs. compiled) remain open. Continue in POSIX shell.
+- This check will eventually be called from a pre-commit hook, but hook wiring is not GT8a's scope.
 
 ## Scope Boundary
 
 In scope:
-- parse `.gitmodules` into structured role descriptors
-- validate all six static schema rules from §3.2
-- reject: missing role, invalid role value, future without ancestor-constraint, past/meta with ancestor-constraint, url != `./`, path != name
-- produce clear error messages identifying which submodule and which rule failed
-- run standalone against a fixture `.gitmodules` (per GT7 acceptance)
+- detect when a past submodule pin moves backward or sideways (non-descendant)
+- compare HEAD gitlink vs index gitlink for each past-typed submodule
+- accept: new pin is descendant of old pin, or submodule is newly added (no old pin)
+- reject: new pin is not a descendant of old pin
+- produce clear error messages identifying which past submodule and the old/new SHAs
+- run against a fixture repo with real git history
 
 Out of scope:
-- dynamic ancestry checks (GT8a, GT8b)
-- hook integration (wiring into pre-commit — that comes when the constraint engine calls the parser)
+- grounded-future checks (GT8b)
+- cross-constraint atomicity (GT8c)
+- hook integration (wiring into pre-commit)
 - resolving D18 or D19
 
 ## Success Condition
 
-- Missing role keys, invalid roles, and future modules lacking ancestor declarations are detected (GT7 acceptance).
-- Validation can run standalone against a fixture repo (GT7 acceptance).
-- All six schema rules produce correct accept/reject on fixture inputs.
+- Fixture repos cover accepted and rejected past-pin transitions (GT8a acceptance).
+- Violating past-pin changes are detected (GT8a acceptance — "rejected before commit" deferred to hook wiring).
 
 ## Stress Test
 
-- Does the parser handle an empty `.gitmodules` (no submodules)?
-- Does it handle a single meta entry (the init-time state)?
-- Does it handle multiple pasts with multiple futures referencing different pasts?
-- Does it correctly reject a future whose `ancestor-constraint` names a nonexistent submodule?
-- Does it correctly reject a future whose `ancestor-constraint` names a `future` or `meta` submodule instead of a `past`?
+- Does it handle a past submodule being added for the first time (no old pin)?
+- Does it handle a past pin advancing to a direct descendant (should accept)?
+- Does it handle a past pin moving to a sibling branch (should reject)?
+- Does it handle a past pin moving backward (should reject)?
+- Does it handle multiple past submodules where one advances validly and one regresses?
 
 ## Audit Target
 
-- Parser produces structured output from `.gitmodules`
-- All six validation rules have fixture test cases (accept and reject)
-- Error messages identify the failing submodule and rule
+- Monotonic check produces correct accept/reject on fixture repos
+- Error messages identify the failing submodule and the old/new SHAs
+- The check uses `git merge-base --is-ancestor` as specified in §4.1
 
 ## Verification
 
-- Run validator against valid fixture → exit 0, no errors
-- Run validator against each invalid fixture → exit non-zero, error message names the violation
-- `git config --file .gitmodules --get-regexp` underlies the parsing (no custom INI parser)
+- Run check against fixture repo with valid past advancement → exit 0, no errors
+- Run check against fixture repo with backward past pin → exit non-zero, error message names the violation
+- Run check against fixture repo with sideways past pin → exit non-zero
+- Run check against fixture repo with newly added past (no old pin) → exit 0

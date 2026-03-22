@@ -1,0 +1,9 @@
+[submodule "alpha"]
+	path = shared
+	url = ./
+	role = past
+
+[submodule "beta"]
+	path = shared
+	url = ./
+	role = past
