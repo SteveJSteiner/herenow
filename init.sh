@@ -164,10 +164,95 @@ HOOK
     # bootstrap.sh
     _bootstrap_blob=$(blob <<'BOOTSTRAP'
 #!/bin/sh
-# bootstrap.sh — activates the governed environment on the now branch.
-# Implementation deferred to GT6.
-echo "bootstrap.sh: not yet implemented (GT6)"
-exit 0
+# bootstrap.sh — activate the governed environment on the now branch.
+# Idempotent — safe to re-run. See decisions.md §8 (D22, D23).
+set -eu
+
+# --- Preconditions ---
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Error: not inside a git repository." >&2
+    echo "Recovery: cd into the repo and re-run ./bootstrap.sh" >&2
+    exit 1
+fi
+
+if ! git rev-parse --verify refs/membrane/root >/dev/null 2>&1; then
+    echo "Error: repository not initialized (refs/membrane/root missing)." >&2
+    echo "Recovery: run ./init.sh first, then ./bootstrap.sh" >&2
+    exit 1
+fi
+
+_branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+if [ "$_branch" != "now" ]; then
+    echo "Error: not on the now branch (current: ${_branch:-detached HEAD})." >&2
+    echo "Recovery: git checkout now && ./bootstrap.sh" >&2
+    exit 1
+fi
+
+# --- Step 1: Activate hooks ---
+
+_hooks_dir=".now/hooks"
+
+if [ ! -d "$_hooks_dir" ]; then
+    echo "Error: $_hooks_dir not found." >&2
+    echo "Recovery: verify the now branch skeleton is intact, then re-run." >&2
+    exit 1
+fi
+
+git config core.hooksPath "$_hooks_dir"
+
+for _hook in "$_hooks_dir"/*; do
+    [ -f "$_hook" ] && chmod +x "$_hook"
+done
+
+echo "  hooks -> $_hooks_dir"
+
+# --- Step 2: Build enforcement (future-ready) ---
+# No source exists yet (D18/D19 open). When .now/src/ appears, build here.
+
+if [ -d ".now/src" ]; then
+    echo "  enforcement source detected — build not yet implemented"
+fi
+
+# --- Step 3: Initialize meta submodule (selective, non-recursive) ---
+# URL override: .gitmodules declares url=./ which resolves to the remote,
+# but the meta branch may only exist locally. Point to the local repo.
+
+if [ -f ".gitmodules" ]; then
+    _repo=$(git rev-parse --show-toplevel)
+    git submodule init meta >/dev/null 2>&1 || true
+    git config submodule.meta.url "$_repo"
+    git -c protocol.file.allow=always submodule update meta || {
+        echo "Error: failed to initialize meta submodule." >&2
+        echo "Recovery: re-run ./bootstrap.sh (safe to retry)." >&2
+        exit 1
+    }
+    echo "  meta submodule ready"
+else
+    echo "Warning: .gitmodules not found — skipping submodule init." >&2
+fi
+
+# --- Verify ---
+
+_ok=true
+
+_hp=$(git config core.hooksPath || true)
+if [ "$_hp" != "$_hooks_dir" ]; then
+    echo "FAIL: core.hooksPath = '${_hp:-unset}' (expected '$_hooks_dir')" >&2
+    _ok=false
+fi
+
+if [ ! -d "meta" ] || [ -z "$(ls -A meta 2>/dev/null)" ]; then
+    echo "FAIL: meta/ is missing or empty." >&2
+    _ok=false
+fi
+
+if [ "$_ok" != true ]; then
+    echo "Bootstrap incomplete. Re-run ./bootstrap.sh to retry." >&2
+    exit 1
+fi
+
+echo "Bootstrap complete."
 BOOTSTRAP
 )
     add_entry 100755 "$_bootstrap_blob" "bootstrap.sh"
@@ -235,6 +320,10 @@ if ! step7_done; then
 
     # Start from the current now tree (includes skeleton from step 5)
     read_into_temp "refs/heads/now^{tree}"
+
+    # Pin meta submodule (gitlink to seeded meta tip from step 6)
+    _meta_tip=$(git rev-parse refs/heads/meta)
+    add_entry 160000 "$_meta_tip" "meta"
 
     # requirements.md
     _blob=$(blob <<'REQUIREMENTS'
@@ -318,7 +407,7 @@ COMPLETIONLOG
 
     _tree=$(write_temp_tree)
     _parent=$(git rev-parse refs/heads/now)
-    _commit=$(git commit-tree "$_tree" -p "$_parent" -m "Seed planning files")
+    _commit=$(git commit-tree "$_tree" -p "$_parent" -m "Seed planning files and pin meta submodule")
     git update-ref refs/heads/now "$_commit"
     echo "  planning files -> $_commit"
 fi
