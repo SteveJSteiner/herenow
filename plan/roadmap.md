@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT14 — GitHub template packaging**
+**GT15 — Fresh-repo acceptance from GitHub template to governed membrane**
 
-GT13 is complete: end-to-end smoke test passes (29/29 assertions) with pre-commit/pre-merge-commit hooks, all existing suites still green (133 total). Both GT14 dependencies are met — GT2 (initializer UX contract) and GT13 (integration gate). GT14 packages the scaffold repo for the "Use this template" flow.
+GT14 is complete: README.md written, D32 verified (template mechanism exposes no membrane branches or refs). Both GT15 dependencies are met — GT13 (integration gate) and GT14 (template packaging). GT15 validates the full path from template generation to governed operation in a fresh repo.
