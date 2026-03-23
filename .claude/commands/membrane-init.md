@@ -7,7 +7,7 @@ A membrane repo requires two steps before it is governed:
 1. `./init.sh` — creates the branch topology (`refs/membrane/root`, `now`, `meta`, `provenance/scaffold`) from the scaffold checkout
 2. `./bootstrap.sh` — activates enforcement on `now` (sets `core.hooksPath` to `.now/hooks/`, initializes the meta submodule, verifies the governed state)
 
-The canonical composition validator lives at `.now/src/check-composition.sh` once bootstrap completes.
+Once bootstrap completes, `.now/src/check-composition.sh` is active — see `/now-commit` for its role in the enforcement model.
 
 These scripts are idempotent. Re-running either is safe.
 

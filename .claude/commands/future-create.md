@@ -33,9 +33,24 @@ Use lowercase hyphen-separated names: `new-auth`, `refactor-api`, `experiment-xy
 
 ```
 git rev-parse --verify now                              # membrane must be initialized
-git show now:.gitmodules | grep "membrane-role = past"  # at least one past entry
+
+# at least one entry with membrane-role = past is registered
+git show now:.gitmodules | awk '
+  /^\[submodule / { in_stanza=1 }
+  in_stanza && /^[[:space:]]*membrane-role[[:space:]]*=[[:space:]]*past/ { found=1 }
+  /^$/ { in_stanza=0 }
+  END { exit !found }
+'
+
 git rev-parse --verify refs/heads/<past-branch>         # past branch ref must exist
-git show now:.gitmodules | grep "<past-branch>"         # past must be registered on now
+
+# past branch is registered in now composition with role = past
+git show now:.gitmodules | awk -v name='<past-branch>' '
+  /^\[submodule / { cur = ($0 == "[submodule \"" name "\"]") }
+  cur && /^[[:space:]]*membrane-role[[:space:]]*=[[:space:]]*past/ { found=1 }
+  END { exit !found }
+'
+
 git rev-parse --verify refs/heads/future/<name> 2>/dev/null  # must not already exist
 ```
 
@@ -117,7 +132,9 @@ If the hook rejects the commit, report its output verbatim.
 **Detect**:
 ```
 git rev-parse refs/heads/future/<name>           # ref present?
-git show now:.gitmodules | grep "future/<name>"  # composition entry present?
+# composition entry committed on now? (stanza-keyed check)
+git show now:.gitmodules | awk -v name='future/<name>' \
+  '$0 == "[submodule \"" name "\"]" {found=1} END{exit !found}'
 ```
 
 **Recover** — resume from step 5 (composition was not written):

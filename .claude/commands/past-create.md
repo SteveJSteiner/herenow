@@ -96,12 +96,14 @@ The pre-commit hook (`.now/hooks/pre-commit`) will run the canonical validator. 
 **Detect**:
 ```
 git rev-parse refs/heads/past/<name>          # ref present?
-git show now:.gitmodules | grep "past/<name>" # composition entry present?
+# composition entry committed on now? (stanza-keyed check)
+git show now:.gitmodules | awk -v name='past/<name>' \
+  '$0 == "[submodule \"" name "\"]" {found=1} END{exit !found}'
 ```
 
 **Recover** — resume from step 3 (composition was not written):
 ```
-git -C <NOW_ROOT> cat .gitmodules   # inspect current state
+cat $NOW_ROOT/.gitmodules   # inspect current on-disk state
 # append the stanza, then:
 git -C <NOW_ROOT> add .gitmodules
 git -C <NOW_ROOT> update-index --add --cacheinfo 160000,<start-commit>,past/<name>

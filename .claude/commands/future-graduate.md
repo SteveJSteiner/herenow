@@ -109,13 +109,33 @@ If the hook rejects the commit, report its output verbatim.
 
 This is safe because the membrane permits past pins to lag past ref tips. No constraint is violated.
 
-**Detect this state**:
+**Detect — two distinct partial states:**
+
+*Lag state (step 3 complete, steps 4–6 not started — nothing staged):*
 ```
-git rev-parse refs/heads/past/<lineage>          # should be FUTURE_PIN
-git rev-parse now:past/<lineage>                 # should still be PAST_PIN if lagging
-git show now:.gitmodules | grep "future/<name>"  # future entry still present?
-git rev-parse now:future/<name> 2>/dev/null      # future gitlink still present?
+# past ref advanced
+git rev-parse refs/heads/past/<lineage>
+
+# committed now still shows the old pin
+git rev-parse now:past/<lineage>
+
+# nothing staged on now yet
+git -C $NOW_ROOT diff --cached
 ```
+
+*Interrupted after staging (steps 4–5 complete, step 6 failed):*
+```
+# staged-but-uncommitted changes present on now
+git -C $NOW_ROOT diff --cached
+
+# inspect the staged gitlink — shows FUTURE_PIN if step 4 ran
+git -C $NOW_ROOT ls-files -s -- past/<lineage>
+
+# inspect on-disk .gitmodules — future stanza absent if step 5 ran
+cat $NOW_ROOT/.gitmodules
+```
+
+Note: `git rev-parse now:...` and `git show now:...` reflect only the **committed** now state. After staging (steps 4–5) but before committing (step 6), use the worktree/index inspection above — not the ref-based commands.
 
 **Recover** — finish the composition update:
 ```
@@ -143,7 +163,9 @@ Abandonment retires the future entry from composition without advancing the past
 ### 1. Validate
 
 ```
-git show now:.gitmodules | grep "future/<name>"  # entry must exist
+# entry must exist in committed now composition (stanza-keyed check)
+git show now:.gitmodules | awk -v name='future/<name>' \
+  '$0 == "[submodule \"" name "\"]" {found=1} END{exit !found}'
 git rev-parse now:future/<name>                  # gitlink must be present
 ```
 
@@ -188,6 +210,8 @@ git -C <NOW_ROOT> diff --cached
 git -C <NOW_ROOT> commit -m "retire future/<name>: abandoned"
 
 # option B: discard and start over
+# <original-pin> is the committed pin on now before any staging:
+ORIGINAL_PIN=$(git rev-parse now:future/<name>)
 git -C <NOW_ROOT> checkout -- .gitmodules
-git -C <NOW_ROOT> update-index --add --cacheinfo 160000,<original-pin>,future/<name>
+git -C <NOW_ROOT> update-index --add --cacheinfo 160000,$ORIGINAL_PIN,future/<name>
 ```
