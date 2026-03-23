@@ -1,46 +1,119 @@
-Compose and commit a change to the now branch, with enforcement pre-validation.
+Commit a composition change to the `now` branch, with preflight validation.
+
+## Canonical validator
+
+The canonical composition validator for this membrane is:
+
+```
+.now/src/check-composition.sh
+```
+
+This is the single authoritative definition of that path. Both the pre-commit hook (`.now/hooks/pre-commit`) and this command's preflight step call this same script. No other validator path is used.
+
+To run preflight manually (outside of a commit):
+```
+<NOW_ROOT>/.now/src/check-composition.sh
+```
 
 ## Context
 
-The `now` branch is the present composition surface — it holds submodule pins, enforcement hooks, and planning files. Every commit to `now` is checked by git hooks for:
-- Past monotonicity (pins only advance)
-- Future grounding (futures descend from their declared past)
-- Atomic composition consistency
-- Meta self-consistency
+The `now` branch is the composition surface. Every commit to it is gated by the pre-commit hook, which calls the canonical validator. This command runs the same validator as an explicit preflight before committing, so hook failures are diagnosed before git is invoked.
 
-This skill helps you commit a composition change with confidence, running a pre-flight check before the actual commit so that hook failures don't catch you by surprise.
+`git commit --dry-run` is not used for preflight. It can trigger unrelated hooks and produces noisy output for the wrong reasons. The canonical validator is called directly.
+
+## Resolving the now authority surface
+
+All operations target `now` directly. Branch switching in the operator's current worktree is not the default.
+
+Resolution order:
+1. **now worktree exists**: `git worktree list --porcelain | awk '/^worktree/{w=$2} /branch refs\/heads\/now/{print w; exit}'`
+2. **Current checkout is now**: `git symbolic-ref --short HEAD` == `now`
+3. **Neither**: report "No now worktree found and current branch is not now." Suggest `/worktrees now` to provision one. Stop.
+
+The resolved directory is `$NOW_ROOT` for all subsequent steps.
 
 ## Arguments
 
-$ARGUMENTS — `"<commit message>"` or a description of what you want to commit
+$ARGUMENTS — the commit message, or a short description of what is being committed
 
-If no message is given, ask the user what change they are committing.
+If no message is given, ask the user before proceeding.
 
-## What to do
+## Operation sequence
 
-1. **Verify branch**: Confirm we are on `now`. If not, ask whether to switch or abort.
+### 1. Resolve now authority surface
 
-2. **Show staged and unstaged changes**: Run `git status` and `git diff --stat HEAD` to see what will be committed.
+Determine `$NOW_ROOT` as described above.
 
-3. **Pre-flight composition check** (before committing):
-   - Run `.now/src/check-composition.sh` directly if it exists and is executable.
-   - If the check fails, report the specific violation(s) and stop — do NOT proceed to commit.
-   - If the check passes, report "Composition valid — proceeding."
+### 2. Show staged and unstaged composition changes
 
-4. **Confirm the commit message** with the user if $ARGUMENTS is a description rather than a quoted message. Suggest a message following the existing commit style in this repo (`git log --oneline -10` to see style).
+```
+git -C $NOW_ROOT status
+git -C $NOW_ROOT diff --stat HEAD
+git -C $NOW_ROOT diff --cached --stat
+```
 
-5. **Stage files** if needed — ask the user which files to stage if nothing is staged yet.
+Report what will be included in the commit. If nothing is staged and nothing is modified, report that and stop.
 
-6. **Commit**: `git commit -m "<message>"`
-   - The enforcement hooks will run automatically.
-   - If the commit fails due to a hook violation, report the exact hook output and explain what constraint was violated.
+### 3. Run canonical preflight validator
 
-7. **Post-commit**: Show `git log --oneline -3` to confirm the commit landed.
+```
+$NOW_ROOT/.now/src/check-composition.sh
+```
 
-## Common composition changes
+If the validator is not present or not executable:
+- Report "Canonical validator not found at .now/src/check-composition.sh"
+- Check whether bootstrap has been run: `git config core.hooksPath`
+- If not bootstrapped, direct the operator to run `/membrane-init bootstrap` first
+- Stop
 
-- Registering a new past branch → use `/past-create`
-- Advancing a past pin → use `/past-advance`
-- Registering a future branch → use `/future-create`
-- Graduating a future → use `/future-graduate`
-- Updating planning files → commit directly with this skill
+If the validator exits non-zero:
+- Report its full output verbatim
+- Identify which constraint failed (past monotonicity, future grounding, meta self-consistency, or composition cross-check) based on the output
+- Stop. Do not proceed to commit.
+
+If the validator exits zero: report "Preflight passed."
+
+### 4. Stage files if needed
+
+If nothing is staged yet, ask the operator which files to stage. Do not auto-stage all changes.
+
+### 5. Commit
+
+```
+git -C $NOW_ROOT commit -m "<message>"
+```
+
+The pre-commit hook will run the canonical validator again. This is expected — it is the same check.
+
+If the commit is rejected by the hook:
+- Report the hook output verbatim
+- Identify the specific membrane constraint that failed
+- Do not retry automatically
+
+### 6. Confirm
+
+```
+git -C $NOW_ROOT log --oneline -3
+```
+
+Show the result. Report the new commit hash and message.
+
+## Failure and recovery
+
+**Mutated first**: the git index is modified when files are staged in step 4, before the commit.
+
+**Partial state that can remain**: staged changes that were not committed (if the hook rejects or the commit fails for another reason).
+
+**Detect**:
+```
+git -C $NOW_ROOT diff --cached
+```
+
+**Recover** — two options:
+```
+# option A: fix the violation and retry the commit
+# (edit the staged files to resolve the constraint failure, then re-run /now-commit)
+
+# option B: unstage everything and start over
+git -C $NOW_ROOT reset HEAD
+```

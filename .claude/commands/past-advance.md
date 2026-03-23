@@ -1,46 +1,108 @@
-Advance a past branch's submodule pin to a new (later) commit.
+Advance the composition pin for a past branch on `now` to a later commit.
 
 ## Context
 
-Past branches must only advance forward — their pins in `.gitmodules` can only move to commits that are descendants of the current pin. This is the **past monotonicity** constraint enforced by `check-past-monotonicity.sh`.
+This command advances the **pin** — the gitlink entry recorded in `now`'s composition — to a new commit already reachable from the corresponding `refs/heads/past/<name>` ref. It does not move the past branch ref itself.
 
-Advancing a past pin means:
-1. Verifying the new commit is a descendant of the current pin (`git merge-base --is-ancestor`)
-2. Updating the submodule index entry on the `now` branch
-3. Committing the change to `now`
+The pin and the branch ref are distinct:
+- `refs/heads/past/<name>` — the branch tip; may be ahead of the pin
+- `now`'s gitlink for `past/<name>` — the declared settled point; this is what this command advances
+
+Pin lag (tip ahead of pin) is normal. This command resolves that lag by catching the pin up to a chosen commit on the past branch.
+
+The past monotonicity constraint requires that the new pin is a descendant of the current pin. A pin may never move backward.
+
+## Resolving the now authority surface
+
+All composition writes target `now` directly. Branch switching in the operator's current worktree is not the default.
+
+Resolution order:
+1. **now worktree exists**: `git worktree list --porcelain | awk '/^worktree/{w=$2} /branch refs\/heads\/now/{print w; exit}'`
+2. **Current checkout is now**: `git symbolic-ref --short HEAD` == `now`
+3. **Neither**: suggest `/worktrees now` and stop
 
 ## Arguments
 
-$ARGUMENTS — `<branch-name> [<new-commit>]`
+$ARGUMENTS — `<branch-name> [<target-commit>]`
 
-- `<branch-name>` — the past branch to advance (e.g., `past/v1` or just `v1`)
-- `<new-commit>` — the commit to advance to (default: current tip of that branch)
+- `<branch-name>` — e.g. `past/v1` or just `v1` (normalized to `past/<name>`)
+- `<target-commit>` — commit to advance the pin to (default: current tip of `refs/heads/past/<name>`)
 
-If `<branch-name>` is missing, list available past branches and ask the user to choose.
-If `<new-commit>` is missing, use the current tip of the named branch.
+If `<branch-name>` is missing, list registered past entries from `git show now:.gitmodules` and ask.
 
-## What to do
+## Operation sequence
 
-1. **Resolve inputs**:
-   - Normalize branch name to `past/<name>` if not already prefixed.
-   - Resolve `<new-commit>` to a full SHA: `git rev-parse <new-commit>`.
-   - Find the current pin from `.gitmodules` index: `git ls-files -s past/<name>` or parse `.gitmodules`.
+### 1. Resolve inputs
 
-2. **Validate monotonicity**:
-   - Run: `git merge-base --is-ancestor <current-pin> <new-commit>`
-   - If this fails (new-commit is NOT a descendant), abort and explain: "Cannot advance past/<name>: <new-commit> is not a descendant of current pin <current-pin>. Past branches may only move forward."
+```
+# normalize name
+BRANCH="past/<name>"
 
-3. **Validate the past branch tip**:
-   - Also verify `<new-commit>` is reachable from `past/<name>`: `git merge-base --is-ancestor <new-commit> past/<name>` or `git branch --contains <new-commit>`.
+# resolve target
+TARGET=$(git rev-parse <target-commit>)          # or: git rev-parse refs/heads/past/<name>
 
-4. **Update the pin on `now`**:
-   - Ensure we are on the `now` branch.
-   - Update the submodule pointer: `git update-index --cacheinfo 160000,<new-commit>,past/<name>`
-   - Stage `.gitmodules` if the URL or other fields changed.
+# read current pin from now composition
+CURRENT_PIN=$(git rev-parse now:past/<name>)
+```
 
-5. **Commit**:
-   - Commit message: `advance past/<name>: <short-old> -> <short-new>`
-   - The pre-commit hook will re-validate monotonicity — if it passes, report success.
+If `CURRENT_PIN` is unresolvable, report "past/<name> is not registered in now composition" and stop.
 
-6. **Report**:
-   - Previous pin, new pin, commit count advanced (if determinable via `git log --oneline <old>..<new> | wc -l`)
+### 2. Validate monotonicity
+
+```
+git merge-base --is-ancestor $CURRENT_PIN $TARGET
+```
+
+If this fails: abort. "Cannot advance past/<name>: target is not a descendant of current pin `$CURRENT_PIN`. Past pins may only move forward."
+
+### 3. Validate target is on the past branch
+
+```
+git merge-base --is-ancestor $TARGET refs/heads/past/<name>
+```
+
+If this fails: abort. "Target commit is not reachable from refs/heads/past/<name>. The pin must point to a commit on the past branch."
+
+### 4. Update the gitlink on now
+
+```
+git -C <NOW_ROOT> update-index --cacheinfo 160000,$TARGET,past/<name>
+```
+
+No `.gitmodules` edit is needed unless the entry itself is new (use `/past-create` for that case).
+
+### 5. Commit on now
+
+```
+git -C <NOW_ROOT> commit -m "advance past/<name>: <short-old> -> <short-new>"
+```
+
+The pre-commit hook will re-validate monotonicity. If it rejects the commit, report the hook output verbatim.
+
+### 6. Report
+
+- Previous pin: `<short-old>`
+- New pin: `<short-new>`
+- Commits advanced: `git log --oneline <CURRENT_PIN>..$TARGET | wc -l`
+
+## Failure and recovery
+
+**Mutated first**: the gitlink is staged on `now` in step 4, before committing.
+
+**Partial state that can remain**: gitlink updated in the now index but not committed (if the commit step fails or is interrupted).
+
+**Detect**:
+```
+git -C <NOW_ROOT> diff --cached                  # staged but uncommitted changes?
+git -C <NOW_ROOT> diff --cached -- past/<name>   # gitlink staged?
+```
+
+**Recover** — the staged change is safe to commit or reset:
+```
+# option A: commit the already-staged advance
+git -C <NOW_ROOT> commit -m "advance past/<name>: <short-old> -> <short-new>"
+
+# option B: discard the staged advance and start over
+git -C <NOW_ROOT> update-index --cacheinfo 160000,$CURRENT_PIN,past/<name>
+git -C <NOW_ROOT> reset HEAD -- past/<name>
+```
