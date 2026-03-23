@@ -12,75 +12,82 @@
 
 ## Task Identity
 
-- **Node ID:** GT15
-- **Title:** Fresh-repo acceptance from GitHub template to governed membrane
+- **Node ID:** GT16
+- **Title:** Hardening, split policy, and first-release cut
 - **Status:** READY
 
 ## Why now
 
-GT14 is complete — README.md written with pre-init→post-init quick start, D32 verified (GitHub template copies only default branch contents; no membrane branches or refs in generated repos). Both GT15 dependencies are met: GT13 (end-to-end smoke test, 29/29 assertions, all suites green) and GT14 (template packaging). GT15 is the acceptance node that validates the full operator path from template generation to governed operation.
+GT15 is complete — acceptance test validated the full template→init→bootstrap→governed path (25/25 assertions, both creation paths, D32 confirmed). All prior suites green (GT7–GT13, 137 total assertions). Every node GT0–GT15 is done. GT16 is the final node: convert the working prototype into a releasable template with explicit known limitations and a policy for future work.
 
 ## Dependencies
 
-- GT13 output: proven spine (smoke test, pre-commit hooks, all component tests — 133 total)
-- GT14 output: README.md with quick-start instructions, D32 verification
+- GT15 output: acceptance test proving the full operator path works end-to-end
+- GT0–GT14 outputs: complete spine — initializer, bootstrap, enforcement (past monotonicity, future grounding, atomic cross-check, meta consistency), immune response, worktree provisioning, template packaging, documentation
 
 ## Output Files
 
-- `test/gt15/run.sh` — acceptance script exercising the full template→init→bootstrap→governed path
-- `continuation.md` (refresh state while GT15 remains active)
+- `KNOWN-LIMITATIONS.md` or equivalent section in README — explicit list of current limitations and constraints
+- `plan/decisions.md` update — split policy for future interstitial nodes
+- Version tag criteria documented
+- `continuation.md` (refresh state while GT16 remains active)
 
 ## Local Context
 
-- GT15 is an H node. The deliverable is acceptance validation, not new enforcement logic.
-- The acceptance script must simulate what a new operator experiences: start from a fresh repo containing only the main-branch contents (as GitHub's "Use this template" would produce), then follow the documented steps.
-- The script should create a temporary bare clone of just the main branch (simulating template generation), then run init.sh → bootstrap.sh and verify the governed state.
-- D32 must be validated in two paths: default-branch-only creation AND "Include all branches" (both must result in no membrane refs before init).
-- The acceptance script should verify the README's documented commands actually work in sequence.
-- Existing test infrastructure: `test/gt13/smoke.sh` (29 assertions), `test/gt12/run.sh` (34 assertions), `test/gt7/run.sh`, `test/gt8a/run.sh`, `test/gt8b/run.sh`, `test/gt8c/run.sh`.
-- The acceptance test differs from GT13's smoke test: GT13 tests the spine in-place; GT15 tests from a fresh starting point as an operator would encounter it.
+- GT16 is an H node. The deliverable is hardening and documentation, not new enforcement logic.
+- The prototype is functionally complete: init→bootstrap→governed composition with enforcement, immune response, meta consistency, worktree provisioning.
+- Total test coverage: 162 assertions across 7 test suites (GT7: 26, GT8a: 11, GT8b: 17, GT8c: 20, GT12: 34, GT13: 29, GT15: 25).
+- The roadmap defines GT16 deliverables as: release notes/known limitations, documented split policy for oversized future nodes, version tag criteria.
+- Acceptance: "The repo can be handed to another operator as a disciplined starter, not just a proof of concept."
+- Current known gaps to document:
+  - Enforcement files must be manually installed on `now` after init (init creates stubs; real hooks/src are on provenance/scaffold)
+  - No CI integration (enforcement is local git hooks only)
+  - No multi-remote or fork workflow support
+  - Platform assumptions (POSIX shell, git 2.38+ for protocol.file.allow)
+  - No `past`/`future` branch creation tooling (operator creates manually)
 
 ## Scope Boundary
 
 In scope:
-- Acceptance script that simulates template generation → init → bootstrap → governed state
-- D32 validation: no membrane branches or refs before init (both creation paths)
-- Verify documented steps from README actually produce a governed now branch
-- Concrete assertions (not prose claims)
+- Known limitations documented explicitly
+- Split policy for future roadmap nodes (how to add interstitial nodes)
+- Version tag criteria (what constitutes a release-worthy state)
+- Any final hardening of documentation or error messages
+- Release notes summarizing what GT0–GT15 produced
 
 Out of scope:
 - New enforcement logic or constraint changes
-- Changes to init.sh or bootstrap.sh
-- Hardening or release notes (GT16)
-- Actually publishing to GitHub (acceptance is local simulation)
+- Changes to init.sh, bootstrap.sh, or hook behavior
+- CI/CD integration
+- Multi-remote or fork workflow support
+- Automated enforcement installation (that would be a future node)
 
 ## Success Condition
 
-- Starting from a simulated template-generated repo, the operator can reach a governed `now` branch with working constraints by following the documented steps.
-- The acceptance script records concrete checks instead of prose claims.
-- Before `./init.sh` runs, the generated repo contains no membrane branches and no `refs/membrane/root`.
+- The repo can be handed to another operator as a disciplined starter, not just a proof of concept.
+- Known limitations are explicit — no hidden assumptions an operator would discover by surprise.
+- A clear policy exists for adding future roadmap nodes without breaking the existing spine.
+- Version tag criteria are documented so a release decision is mechanical, not subjective.
 
 ## Stress Test
 
-- Does the simulated template generation accurately reflect what GitHub's "Use this template" produces?
-- Does init.sh work correctly in a repo that has no membrane refs at all?
-- Does bootstrap.sh succeed in the freshly initialized repo?
-- After bootstrap, do composition constraints actually fire on commits to now?
-- Does "Include all branches" path also produce a clean pre-init state?
+- Would a new operator encountering the template know what works and what doesn't before running init.sh?
+- Are the platform requirements (POSIX shell, git version) documented where the operator will see them?
+- Does the split policy handle the case where a future node proves too large mid-implementation?
+- Are the version tag criteria falsifiable (can you definitively say "this is/isn't release-ready")?
 
 ## Audit Target
 
-- `test/gt15/run.sh` exists and is executable
-- Script simulates template generation (fresh repo with only main-branch contents)
-- Pre-init state verified: no membrane branches, no refs/membrane/root
-- init.sh runs successfully in the fresh repo
-- bootstrap.sh runs successfully after init
-- At least one governance check fires after bootstrap (constraint enforcement is live)
-- Both template creation paths validated (default-branch-only and all-branches)
-- All assertions are concrete (exit codes, ref checks, hook behavior)
+- Known limitations documented and reachable from README or project root
+- Split policy added to decisions.md or roadmap.md
+- Version tag criteria documented
+- Release notes summarize GT0–GT15 outputs
+- All existing tests still pass after any documentation changes
+- No new enforcement logic introduced (H node constraint)
 
 ## Verification
 
-- `test/gt15/run.sh` exits 0 with all assertions passing
-- Existing test suites still pass (GT7–GT13)
-- Acceptance covers the exact sequence documented in README.md
+- All test suites still pass (GT7–GT13, GT15)
+- Known limitations match actual observed behavior (no aspirational claims)
+- Split policy is concrete enough to follow mechanically
+- Version tag criteria are falsifiable

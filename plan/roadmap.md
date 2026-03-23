@@ -281,6 +281,6 @@ GT15 -> GT16
 
 ## Immediate next node
 
-**GT15 — Fresh-repo acceptance from GitHub template to governed membrane**
+**GT16 — Hardening, split policy, and first-release cut**
 
-GT14 is complete: README.md written, D32 verified (template mechanism exposes no membrane branches or refs). Both GT15 dependencies are met — GT13 (integration gate) and GT14 (template packaging). GT15 validates the full path from template generation to governed operation in a fresh repo.
+GT15 is complete: acceptance test validated the full template→init→bootstrap→governed path (25/25 assertions, both creation paths, D32 confirmed). All prior suites green (137 total). GT16 is the final node — convert the working prototype into a releasable template with documented limitations and split policy.
