@@ -561,6 +561,34 @@ The following are not open decisions awaiting a resolution so much as areas wher
 
 ---
 
+## Split policy for roadmap nodes
+
+When a roadmap node proves too large to complete as a single auditable unit, it must be split before implementation drift accumulates. This section defines the mechanical process.
+
+### When to split
+
+A node must split if any of these conditions hold during implementation:
+
+1. **Scope discovery.** Implementation reveals sub-problems not anticipated in the node's acceptance criteria, and addressing them would change the node's deliverables.
+2. **Partial completion.** Some deliverables are done and committable, but remaining deliverables have unresolved dependencies or design questions.
+3. **Acceptance drift.** The acceptance criteria no longer match what the implementation actually produces, and rewriting acceptance would change the node's identity.
+
+A node should not split merely because it takes multiple commits or sessions. The unit of splitting is the acceptance boundary, not the commit boundary.
+
+### How to split
+
+1. **Choose child IDs.** Append a lowercase letter suffix to the parent ID: `GT8a`, `GT8b`, `GT8c`. If the parent already has a suffix, extend it: `GT8a1`, `GT8a2`. Do not reuse the parent ID for a child.
+2. **Narrow acceptance.** Each child must have its own acceptance criteria that are strictly narrower than the parent's. The union of all children's acceptance must cover the parent's original acceptance.
+3. **Update the DAG.** In `roadmap.md`, replace the parent's edges with edges to/from the children. Children inherit the parent's inbound dependencies. Outbound dependents point to the last child (or whichever child produces the output they need).
+4. **Update continuation.md.** Replace the current task with the first child. The continuation file holds exactly one task at a time — the other children are visible only in the roadmap DAG.
+5. **Log the split.** Append a `split` event to `completion-log.md` for the parent node.
+
+### Interstitial nodes
+
+If work is discovered between two existing nodes (not a split of either), assign a new ID that does not collide with existing IDs. Use the next available integer (e.g., `GT17`, `GT18`). Do not insert fractional IDs between existing integers. Add the node to the DAG with explicit dependency edges and document it in `roadmap.md` with the same per-node fields as any other node.
+
+---
+
 ## Decision log
 
 | ID | Status | §  | Summary |

@@ -78,6 +78,24 @@ test/            Scaffold test suites
 
 After initialization, the `now` branch carries its own layout with `bootstrap.sh`, `.gitmodules`, and `plan/` seeded fresh.
 
+## Requirements
+
+- **POSIX shell** (`/bin/sh`)
+- **Git 2.38+** (required for `protocol.file.allow` during bootstrap)
+
+## What's included
+
+This template delivers a complete local enforcement spine:
+
+- **Initializer** (`init.sh`) — eight-step, idempotent setup that creates the membrane branch topology from any GitHub-template-generated repo
+- **Bootstrap** (`bootstrap.sh`) — activates hooks and initializes the meta submodule
+- **Constraint engine** — past monotonicity, future grounding, atomic cross-check, and meta self-consistency checks, all running as git hooks
+- **Immune response** — non-bypassable post-commit/post-merge/post-rewrite detection with auto-revert and tag-and-refuse-next
+- **Worktree provisioning** — optional ergonomic command to create worktrees for each temporal role
+- **Test suites** — 162 assertions across 7 suites validating the full init-to-governed path
+
+See [KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md) for current constraints, platform assumptions, and open design decisions.
+
 ## Important
 
 - **Template generation alone does not produce a governed repository.** You must run `./init.sh` followed by `./bootstrap.sh`.

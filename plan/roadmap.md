@@ -279,8 +279,20 @@ GT15 -> GT16
 3. Get the minimal constraint engine working before solving immune response and meta self-consistency.
 4. Treat GitHub template packaging as a late packaging node, not the architectural core.
 
-## Immediate next node
+## Version tag criteria
 
-**GT16 — Hardening, split policy, and first-release cut**
+A version tag (e.g., `v0.1`) may be applied when all of the following are true:
 
-GT15 is complete: acceptance test validated the full template→init→bootstrap→governed path (25/25 assertions, both creation paths, D32 confirmed). All prior suites green (137 total). GT16 is the final node — convert the working prototype into a releasable template with documented limitations and split policy.
+1. **All roadmap nodes through the tagged scope are complete.** Every node has an accepted completion, a rejected-with-reason closure, or an explicit split into completed children. No node is in-progress or deferred.
+2. **All test suites pass.** Every test suite referenced by completed nodes produces zero failures. The total assertion count is recorded in the tag message.
+3. **Known limitations are documented.** `KNOWN-LIMITATIONS.md` exists at the project root and covers every constraint an operator would encounter before or during normal use. No undocumented platform assumptions.
+4. **No enforcement regression.** The constraint checks (past monotonicity, future grounding, atomic cross-check, meta self-consistency) and immune response behave identically to their last validated state. Verification: re-run the GT13 smoke suite and GT15 acceptance suite.
+5. **README is current.** The quick-start instructions match the actual init/bootstrap behavior. No references to unimplemented features.
+
+A tag should not be applied if any test suite has been disabled, if known limitations have been deferred without documentation, or if open design decisions have been silently resolved without updating decisions.md.
+
+Tag format: `v<major>.<minor>` on the default branch. The tag message includes the date, the last completed roadmap node, and the total assertion count.
+
+## Completion status
+
+All nodes GT0–GT16 complete. The roadmap for the initial spine is finished.
