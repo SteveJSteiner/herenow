@@ -107,6 +107,10 @@ setup_repo() {
     git init -q
     git config user.email "test@test.com"
     git config user.name "Test"
+    git config commit.gpgsign false
+
+    # Capture default branch name (varies by git version and config).
+    _default_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "master")
 
     # Initial commit.
     echo "init" > README
@@ -126,7 +130,7 @@ setup_repo() {
     cp "$NOW_DIR/hooks/post-rewrite" .now/hooks/
     chmod +x .now/hooks/*
 
-    # Commit enforcement files on main.
+    # Commit enforcement files on default branch.
     git add .now/
     git commit -q -m "add enforcement"
 
@@ -142,8 +146,8 @@ setup_repo() {
     git commit -q -m "meta with enforcement manifest"
     META_SHA=$(git rev-parse HEAD)
 
-    # Return to main.
-    git checkout -q main
+    # Return to default branch.
+    git checkout -q "$_default_branch"
 
     # Add .gitmodules declaring meta submodule.
     cat > .gitmodules <<'GITMOD'
@@ -240,7 +244,7 @@ test_advance_pin_matching() {
     git add README.md
     git commit -q -m "update meta readme"
     NEW_META_SHA=$(git rev-parse HEAD)
-    git checkout -q main
+    git checkout -q -
 
     # Update the gitlink to the new meta SHA.
     git update-index --add --cacheinfo "160000,$NEW_META_SHA,meta"
@@ -271,7 +275,7 @@ MANIFEST
     git add enforcement-manifest
     git commit -q -m "meta with wrong manifest"
     NEW_META_SHA=$(git rev-parse HEAD)
-    git checkout -q main
+    git checkout -q -
 
     # Update gitlink to point to the new meta.
     git update-index --add --cacheinfo "160000,$NEW_META_SHA,meta"
@@ -312,6 +316,7 @@ test_no_meta_submodule() {
     git init -q
     git config user.email "test@test.com"
     git config user.name "Test"
+    git config commit.gpgsign false
 
     echo "init" > README
     git add README
@@ -344,6 +349,7 @@ test_empty_gitmodules() {
     git init -q
     git config user.email "test@test.com"
     git config user.name "Test"
+    git config commit.gpgsign false
 
     echo "init" > README
     echo "# no submodules" > .gitmodules
@@ -367,6 +373,7 @@ test_meta_not_pinned() {
     git init -q
     git config user.email "test@test.com"
     git config user.name "Test"
+    git config commit.gpgsign false
 
     echo "init" > README
     cat > .gitmodules <<'GITMOD'

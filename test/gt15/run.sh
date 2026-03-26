@@ -58,7 +58,11 @@ for _f in "$REPO_ROOT/init.sh" \
           "$NOW_DIR/src/check-past-monotonicity.sh" \
           "$NOW_DIR/src/check-future-grounding.sh" \
           "$NOW_DIR/src/immune-response.sh" \
-          "$NOW_DIR/src/check-meta-consistency.sh"; do
+          "$NOW_DIR/src/check-meta-consistency.sh" \
+          "$NOW_DIR/src/create-past.sh" \
+          "$NOW_DIR/src/create-future.sh" \
+          "$NOW_DIR/src/advance-past.sh" \
+          "$NOW_DIR/src/graduate-future.sh"; do
     if [ ! -f "$_f" ]; then
         echo "Error: required file not found: $_f" >&2
         exit 2
@@ -97,6 +101,7 @@ test_path_a_pre_init() {
     git init -q
     git config user.email "gt15@test.com"
     git config user.name "GT15 Acceptance"
+    git config commit.gpgsign false
     git add -A
     git commit -q -m "Initial commit from template"
 
@@ -186,55 +191,45 @@ test_path_a_init() {
 }
 
 test_path_a_enforcement() {
-    echo "--- Path A.3: Install enforcement"
+    echo "--- Path A.3: Verify enforcement seeded by init.sh"
     cd "$FIXTURE_A"
 
-    # Install real enforcement from source repo onto now branch
-    mkdir -p .now/src
-    for _f in check-composition.sh validate-gitmodules.sh \
-              check-past-monotonicity.sh check-future-grounding.sh \
-              immune-response.sh check-meta-consistency.sh \
-              provision-worktrees.sh; do
-        cp "$NOW_DIR/src/$_f" .now/src/
-    done
+    # init.sh step 5 seeds all enforcement files from the scaffold's HEAD tree.
+    # Verify the key files are present on the checked-out now branch.
+    if [ -f ".now/src/check-composition.sh" ] && \
+       [ -f ".now/src/check-meta-consistency.sh" ] && \
+       [ -f ".now/hooks/pre-commit" ] && \
+       [ -f ".now/hooks/post-commit" ]; then
+        pass "enforcement source seeded by init.sh"
+    else
+        fail "enforcement source missing after init.sh"
+    fi
 
-    for _h in post-commit post-merge post-rewrite pre-commit pre-merge-commit; do
-        cp "$NOW_DIR/hooks/$_h" .now/hooks/
-    done
-    chmod +x .now/hooks/*
+    # init.sh step 5 also seeds the operator helper scripts.
+    if [ -f ".now/src/create-past.sh" ] && \
+       [ -f ".now/src/create-future.sh" ] && \
+       [ -f ".now/src/advance-past.sh" ] && \
+       [ -f ".now/src/graduate-future.sh" ]; then
+        pass "operator helper scripts seeded by init.sh"
+    else
+        fail "operator helper scripts missing after init.sh"
+    fi
 
-    # Update meta branch with enforcement manifest
-    _manifest_file=$(mktemp)
-    echo "# Enforcement manifest" > "$_manifest_file"
-    for _f in .now/hooks/pre-commit .now/hooks/pre-merge-commit \
-              .now/hooks/post-commit .now/hooks/post-merge .now/hooks/post-rewrite \
-              .now/src/check-composition.sh .now/src/validate-gitmodules.sh \
-              .now/src/check-past-monotonicity.sh .now/src/check-future-grounding.sh \
-              .now/src/immune-response.sh .now/src/check-meta-consistency.sh; do
-        _hash=$(git hash-object "$_f")
-        echo "$_hash $_f" >> "$_manifest_file"
-    done
-
+    # init.sh step 6 seeds enforcement-manifest on the meta branch.
     _meta_tip=$(git rev-parse refs/heads/meta)
-    _tmpidx="$(git rev-parse --git-dir)/index.gt15.tmp"
+    if git show "$_meta_tip:enforcement-manifest" >/dev/null 2>&1; then
+        pass "enforcement-manifest present on meta branch"
+    else
+        fail "enforcement-manifest missing from meta branch"
+    fi
 
-    GIT_INDEX_FILE="$_tmpidx" git read-tree "$_meta_tip"
-    _manifest_blob=$(git hash-object -w "$_manifest_file")
-    rm -f "$_manifest_file"
-    GIT_INDEX_FILE="$_tmpidx" git update-index --add --cacheinfo "100644,$_manifest_blob,enforcement-manifest"
-    _new_tree=$(GIT_INDEX_FILE="$_tmpidx" git write-tree)
-    _new_meta=$(git commit-tree "$_new_tree" -p "$_meta_tip" -m "Add enforcement manifest")
-    git update-ref refs/heads/meta "$_new_meta"
-    rm -f "$_tmpidx"
-
-    # Update meta pin on now branch
-    git update-index --add --cacheinfo "160000,$_new_meta,meta"
-
-    # Stage and commit enforcement files (hooks not yet active — safe)
-    git add .now/src/ .now/hooks/
-    git commit -q -m "Install enforcement machinery"
-
-    pass "enforcement machinery installed"
+    # The manifest must be non-empty (init generates it from step 5 files).
+    _manifest_lines=$(git show "$_meta_tip:enforcement-manifest" | grep -v '^#' | grep -v '^$' | wc -l | tr -d ' ')
+    if [ "$_manifest_lines" -gt 0 ]; then
+        pass "enforcement-manifest is non-empty ($_manifest_lines entries)"
+    else
+        fail "enforcement-manifest is empty"
+    fi
 }
 
 test_path_a_bootstrap() {
@@ -336,6 +331,7 @@ test_path_b() {
     cd "$FIXTURE_B"
     git config user.email "gt15@test.com"
     git config user.name "GT15 Acceptance"
+    git config commit.gpgsign false
 
     # Create local tracking branches for all remote branches
     for _remote in $(git branch -r | grep -v HEAD | sed 's|^ *origin/||'); do

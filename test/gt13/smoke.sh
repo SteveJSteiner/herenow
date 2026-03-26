@@ -79,7 +79,11 @@ for _f in "$INIT_SH" \
           "$NOW_DIR/src/check-future-grounding.sh" \
           "$NOW_DIR/src/immune-response.sh" \
           "$NOW_DIR/src/check-meta-consistency.sh" \
-          "$NOW_DIR/src/provision-worktrees.sh"; do
+          "$NOW_DIR/src/provision-worktrees.sh" \
+          "$NOW_DIR/src/create-past.sh" \
+          "$NOW_DIR/src/create-future.sh" \
+          "$NOW_DIR/src/advance-past.sh" \
+          "$NOW_DIR/src/graduate-future.sh"; do
     if [ ! -f "$_f" ]; then
         echo "Error: required file not found: $_f" >&2
         exit 2
@@ -120,8 +124,11 @@ test_init_bootstrap() {
     git init -q
     git config user.email "smoke@test.com"
     git config user.name "Smoke Test"
+    git config commit.gpgsign false
+    # Copy scaffold enforcement files so init.sh step 5 can seed them.
+    cp -r "$NOW_DIR" .now
     echo "seed" > README.md
-    git add README.md
+    git add .now README.md
     git commit -q -m "initial seed"
 
     # --- Run init.sh ---
@@ -150,53 +157,6 @@ test_init_bootstrap() {
     else
         fail "bootstrap.sh missing"
     fi
-
-    # --- Install enforcement machinery ---
-
-    mkdir -p .now/src
-    for _f in check-composition.sh validate-gitmodules.sh \
-              check-past-monotonicity.sh check-future-grounding.sh \
-              immune-response.sh check-meta-consistency.sh \
-              provision-worktrees.sh; do
-        cp "$NOW_DIR/src/$_f" .now/src/
-    done
-
-    for _h in post-commit post-merge post-rewrite pre-commit pre-merge-commit; do
-        cp "$NOW_DIR/hooks/$_h" .now/hooks/
-    done
-    chmod +x .now/hooks/*
-
-    # --- Update meta branch with enforcement manifest ---
-
-    _manifest_file=$(mktemp)
-    echo "# Enforcement manifest" > "$_manifest_file"
-    for _f in .now/hooks/pre-commit .now/hooks/pre-merge-commit \
-              .now/hooks/post-commit .now/hooks/post-merge .now/hooks/post-rewrite \
-              .now/src/check-composition.sh .now/src/validate-gitmodules.sh \
-              .now/src/check-past-monotonicity.sh .now/src/check-future-grounding.sh \
-              .now/src/immune-response.sh .now/src/check-meta-consistency.sh; do
-        _hash=$(git hash-object "$_f")
-        echo "$_hash $_f" >> "$_manifest_file"
-    done
-
-    _meta_tip=$(git rev-parse refs/heads/meta)
-    _tmpidx="$(git rev-parse --git-dir)/index.smoke.tmp"
-
-    GIT_INDEX_FILE="$_tmpidx" git read-tree "$_meta_tip"
-    _manifest_blob=$(git hash-object -w "$_manifest_file")
-    rm -f "$_manifest_file"
-    GIT_INDEX_FILE="$_tmpidx" git update-index --add --cacheinfo "100644,$_manifest_blob,enforcement-manifest"
-    _new_tree=$(GIT_INDEX_FILE="$_tmpidx" git write-tree)
-    _new_meta=$(git commit-tree "$_new_tree" -p "$_meta_tip" -m "Add enforcement manifest")
-    git update-ref refs/heads/meta "$_new_meta"
-    rm -f "$_tmpidx"
-
-    # Update meta pin on now branch
-    git update-index --add --cacheinfo "160000,$_new_meta,meta"
-
-    # Stage and commit enforcement files (no hooks active yet — safe)
-    git add .now/src/ .now/hooks/
-    git commit -q -m "Install enforcement machinery"
 
     # --- Run bootstrap.sh ---
 
