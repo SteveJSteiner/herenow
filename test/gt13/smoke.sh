@@ -83,7 +83,8 @@ for _f in "$INIT_SH" \
           "$NOW_DIR/src/create-past.sh" \
           "$NOW_DIR/src/create-future.sh" \
           "$NOW_DIR/src/advance-past.sh" \
-          "$NOW_DIR/src/graduate-future.sh"; do
+          "$NOW_DIR/src/graduate-future.sh" \
+          "$NOW_DIR/src/update-manifest.sh"; do
     if [ ! -f "$_f" ]; then
         echo "Error: required file not found: $_f" >&2
         exit 2
@@ -401,6 +402,49 @@ test_meta_consistency() {
 }
 
 # ===================================================================
+# Scenario 7: update-manifest.sh
+# ===================================================================
+
+test_update_manifest() {
+    echo "--- Scenario 7: update-manifest.sh"
+    cd "$FIXTURE"
+
+    # Tamper with an enforcement file to put it out of sync with the manifest.
+    echo "# modified" >> .now/src/check-composition.sh
+
+    # Meta consistency should now fail (manifest mismatch).
+    rc=0
+    sh .now/src/check-meta-consistency.sh .gitmodules >/dev/null 2>&1 || rc=$?
+    assert_exit "$rc" 1 "meta consistency detects modified enforcement file"
+
+    # Run update-manifest.sh — should regenerate manifest and stage new meta pin.
+    rc=0
+    sh .now/src/update-manifest.sh >/dev/null 2>&1 || rc=$?
+    assert_exit "$rc" 0 "update-manifest.sh exits 0"
+
+    # Meta consistency should pass against working tree now.
+    rc=0
+    sh .now/src/check-meta-consistency.sh .gitmodules >/dev/null 2>&1 || rc=$?
+    assert_exit "$rc" 0 "meta consistency passes after update-manifest"
+
+    # The staged meta gitlink should point to a new meta tip.
+    _staged_meta=$(git ls-files --stage -- meta 2>/dev/null | awk '{print $2}')
+    _meta_tip=$(git rev-parse refs/heads/meta)
+    assert_eq "$_staged_meta" "$_meta_tip" "staged meta gitlink matches new meta tip"
+
+    # Committing the result should succeed (pre-commit passes with new manifest).
+    git add .now/src/check-composition.sh
+    rc=0
+    git commit -q -m "Update enforcement source via update-manifest" 2>/dev/null || rc=$?
+    assert_exit "$rc" 0 "commit with updated manifest succeeds"
+
+    # No immune response triggered.
+    _head_msg=$(git log -1 --format=%s)
+    assert_eq "$_head_msg" "Update enforcement source via update-manifest" \
+        "no auto-revert after update-manifest commit"
+}
+
+# ===================================================================
 # Run all scenarios
 # ===================================================================
 
@@ -418,6 +462,8 @@ echo ""
 test_worktree_provisioning
 echo ""
 test_meta_consistency
+echo ""
+test_update_manifest
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="

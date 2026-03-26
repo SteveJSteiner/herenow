@@ -9,8 +9,8 @@ To be precise about what that means: when the enforcement source is active, a
 commit to `now` that pins a `past` branch to an ancestor of its current pin
 will be rejected before the commit lands (`pre-commit`), and if it sneaks in
 anyway (`--no-verify`), it will be automatically reverted on the next governed
-operation (`post-commit`). The constraint logic is POSIX shell, readable in
-`.now/src/`, with no external dependencies.
+operation (`post-commit`). The constraint logic lives in `.now/src/` — plain
+POSIX shell, no external dependencies, readable in one sitting.
 
 ---
 
@@ -140,8 +140,12 @@ The only submodule declared at init time is `meta`:
     role = meta
 ```
 
-The `url = ./` pattern is self-referencing: the `meta` submodule points at the
-same repository, pinned to the `meta` branch tip.
+The `url = ./` pattern makes this a self-referencing submodule: `meta` pins a
+branch from the same repository. This is the most confusing part of the setup.
+The key insight is that git treats a submodule as a pointer to a specific commit
+object — the fact that it lives in the same repository is exactly what lets
+`bootstrap.sh` initialize it locally without a remote. `bootstrap.sh` overrides
+the URL to the local repo path before running `git submodule update`.
 
 ---
 
@@ -186,7 +190,8 @@ The enforcement source on `provenance/scaffold` contains:
 - `.now/src/check-future-grounding.sh` — future pin ancestry check
 - `.now/src/check-meta-consistency.sh` — enforcement manifest verification
 - `.now/src/provision-worktrees.sh` — optional worktree provisioner
-- `.now/src/create-past.sh`, `create-future.sh`, `advance-past.sh`, `graduate-future.sh` — operator helpers
+- `.now/src/create-past.sh`, `create-future.sh`, `advance-past.sh`, `graduate-future.sh` — operator helpers for branch and pin management
+- `.now/src/update-manifest.sh` — regenerates the enforcement-manifest on meta after enforcement source changes
 - `.now/hooks/pre-commit`, `pre-merge-commit` — the pre-hooks
 - `.now/hooks/post-commit`, `post-merge`, `post-rewrite` — the post-hooks
 
@@ -202,10 +207,22 @@ and compares each listed file against the working tree. Because the manifest is
 generated from the files that step 5 just committed, the check passes on the
 first governed commit without any manual setup.
 
-If you later update the enforcement source — for example by pulling changes from
-an upstream template — those changes must be manually re-propagated to the `now`
-branch and the `enforcement-manifest` updated on `meta`. There is no automated
-sync mechanism for updates.
+If you update enforcement source files — for example by pulling changes from an
+upstream template into `.now/` — run `update-manifest.sh` afterward to keep the
+meta manifest consistent:
+
+```sh
+# copy or patch the updated files into .now/hooks/ and .now/src/ however you like
+sh .now/src/update-manifest.sh
+git add .now/
+git commit -m "Update enforcement source"
+```
+
+`update-manifest.sh` reads the current working-tree files in `.now/hooks/` and
+`.now/src/`, creates a new commit on `meta` with a matching manifest, and stages
+the updated meta gitlink on `now`. Because the pre-commit hook reads the meta
+pin from the index, the new manifest is in place before the constraint check
+runs — so the commit succeeds without any manual plumbing.
 
 ---
 
@@ -220,8 +237,8 @@ After init, these branches exist:
 | `provenance/scaffold` | Provenance | Snapshot of the template state before init — contains the full enforcement source |
 | `refs/membrane/root` | Shared origin | An empty commit; the common ancestor of all branches |
 
-The operator creates `past/*` and `future/*` branches manually. There is no
-tooling to create them — see [Adding past and future branches](#adding-past-and-future-branches).
+The operator creates `past/*` and `future/*` branches using the helper scripts
+in `.now/src/` — see [Adding past and future branches](#adding-past-and-future-branches).
 
 ---
 
@@ -318,7 +335,9 @@ An empty manifest is also a violation.
 This means: to pass the meta-consistency check, the `meta` branch must have an
 `enforcement-manifest` at its tip, the manifest must be non-empty, and every
 file listed in it must exist in the working tree with the exact blob hash
-declared. Populating this manifest is part of the operator's setup work.
+declared. `init.sh` step 6 generates this manifest automatically from the files
+seeded in step 5, so the check passes on the first governed commit with no setup
+beyond `init.sh` and `bootstrap.sh`.
 
 ---
 
@@ -396,10 +415,10 @@ runs the constraint evaluator. The violation is detected and `membrane_auto_reve
 is called. The working tree ends up at a valid state, with the violation and
 its revert both in history.
 
-This is documented in the README as "bypass detection": post-hooks cannot be
-skipped by `--no-verify`. The recursion guard in `membrane_guard_active` (which
-checks for the `$GIT_DIR/MEMBRANE_REVERTING` file) prevents the auto-revert
-from triggering another auto-revert.
+The reason this works: post-hooks cannot be skipped by `--no-verify`. The
+recursion guard in `membrane_guard_active` (which checks for the
+`$GIT_DIR/MEMBRANE_REVERTING` file) prevents the auto-revert from triggering
+another auto-revert.
 
 Note: immune response is local only. It cannot prevent a `git push --force` of
 violated state to a remote. See [Known limitations](#known-limitations-and-discrepancies).
@@ -492,13 +511,15 @@ notice.
 
 ## Known limitations and discrepancies
 
-### Manual propagation for enforcement source updates
+### No automated upstream sync
 
-`init.sh` seeds the `now` branch with the enforcement source from the scaffold,
-and seeds an `enforcement-manifest` on `meta` listing each file's blob hash. If
-the source is later updated — for example by pulling changes from an upstream
-template — those updates must be manually re-propagated to the `now` branch and
-the manifest updated on `meta`. There is no automated sync mechanism.
+`init.sh` seeds the `now` branch with enforcement source from the scaffold, and
+seeds an `enforcement-manifest` on `meta` listing each file's blob hash. If the
+source is later updated — for example by pulling changes from an upstream
+template — the operator copies the new files into `.now/` and then runs
+`sh .now/src/update-manifest.sh` to regenerate the manifest and advance the
+meta pin. What is not automated is discovering or fetching the upstream changes
+themselves; there is no `git pull`-style mechanism for template updates.
 
 ### Enforcement is local only
 
@@ -543,11 +564,10 @@ The repository includes test suites in `test/` and `.now/tests/`:
 | GT8b | `test/gt8b/` | `check-future-grounding.sh` — grounding checks with real git history |
 | GT8c | `test/gt8c/` | `check-composition.sh` — atomic cross-check orchestrator |
 | GT12 | `test/gt12/` | `provision-worktrees.sh` — worktree creation, idempotence, edge cases |
-| GT13 | `test/gt13/` | End-to-end smoke test: init → enforcement → bootstrap → compositions |
+| GT13 | `test/gt13/` | End-to-end smoke test: init → enforcement → bootstrap → compositions → update-manifest |
 | GT15 | `test/gt15/` | Fresh-repo acceptance: template generation to governed membrane |
 | — | `.now/tests/test-immune-response.sh` | All immune-response hook paths (revert, amend, merge, rebase) |
 | — | `.now/tests/test-meta-consistency.sh` | Meta self-consistency check |
 
-KNOWN-LIMITATIONS reports 162 assertions across these suites. Tests do not
-cover multi-remote scenarios, non-POSIX platforms, git below 2.38, or
-concurrent operator workflows.
+194 assertions across these suites. Tests do not cover multi-remote scenarios,
+non-POSIX platforms, git below 2.38, or concurrent operator workflows.
