@@ -16,8 +16,9 @@ set -eu
 
 GIT_DIR="$(git rev-parse --git-dir)"
 TEMP_INDEX="$GIT_DIR/index.init.tmp"
+TEMP_ENTRIES="$GIT_DIR/entries.init.tmp"
 
-trap 'rm -f "$TEMP_INDEX"' EXIT
+trap 'rm -f "$TEMP_INDEX" "$TEMP_ENTRIES"' EXIT
 
 # --- Helpers ---
 
@@ -150,16 +151,22 @@ if ! step5_done; then
 
     read_into_temp "refs/heads/now^{tree}"
 
-    # Hook stubs (all identical, executable)
-    _hook_blob=$(blob <<'HOOK'
-#!/bin/sh
-# Stub launcher — enforcement logic added in later roadmap nodes.
-exit 0
-HOOK
-)
-    for _hook in pre-commit pre-merge-commit post-commit post-merge post-rewrite; do
-        add_entry 100755 "$_hook_blob" ".now/hooks/$_hook"
-    done
+    # Hooks and enforcement source from scaffold (HEAD tree).
+    # The blobs are already in the object store — just reference them.
+    git ls-tree -r HEAD -- .now/hooks/ .now/src/ > "$TEMP_ENTRIES" 2>/dev/null || true
+    if [ ! -s "$TEMP_ENTRIES" ]; then
+        echo "Error: .now/hooks/ and .now/src/ not found in HEAD." >&2
+        echo "  Run init.sh from the scaffold branch (main), not from now." >&2
+        exit 1
+    fi
+    while IFS= read -r _line; do
+        [ -z "$_line" ] && continue
+        _mode=$(printf '%s' "$_line" | awk '{print $1}')
+        _sha=$(printf '%s'  "$_line" | awk '{print $3}')
+        _path=$(printf '%s' "$_line" | awk -F'\t' '{print $2}')
+        add_entry "$_mode" "$_sha" "$_path"
+    done < "$TEMP_ENTRIES"
+    rm -f "$TEMP_ENTRIES"
 
     # bootstrap.sh
     _bootstrap_blob=$(blob <<'BOOTSTRAP'
@@ -207,12 +214,15 @@ done
 
 echo "  hooks -> $_hooks_dir"
 
-# --- Step 2: Build enforcement (future-ready) ---
-# No source exists yet (D18/D19 open). When .now/src/ appears, build here.
+# --- Step 2: Verify enforcement source ---
 
-if [ -d ".now/src" ]; then
-    echo "  enforcement source detected — build not yet implemented"
+if [ ! -d ".now/src" ]; then
+    echo "Error: .now/src/ not found." >&2
+    echo "Recovery: verify init.sh completed successfully, then re-run bootstrap.sh." >&2
+    exit 1
 fi
+
+echo "  enforcement source ready"
 
 # --- Step 3: Initialize meta submodule (selective, non-recursive) ---
 # URL override: .gitmodules declares url=./ which resolves to the remote,
