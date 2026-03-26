@@ -6,9 +6,11 @@
 # enforcement-manifest to the meta branch (without checking it out), and stages
 # the new meta gitlink on now.
 #
-# After running, stage any changed enforcement files and commit:
-#   git add .now/
+# After running, commit:
 #   git commit -m "Update enforcement source"
+#
+# The script stages both the updated meta gitlink and the enforcement files
+# it manifested, so no manual git add is needed.
 #
 # Usage: update-manifest.sh
 #   Must be run from the now branch after bootstrap.
@@ -139,7 +141,14 @@ echo "  meta -> $_commit"
 git update-index --add --cacheinfo "160000,$_commit,$_meta_path"
 echo "  Staged gitlink $_meta_path -> $_commit"
 
+# Stage the enforcement files whose hashes were just manifested.
+# This makes the operation atomic: manifest + source files land together.
+for _dir in ".now/hooks" ".now/src"; do
+    [ -d "$REPO_ROOT/$_dir" ] || continue
+    git -C "$REPO_ROOT" add -- "$_dir"
+    echo "  Staged $_dir"
+done
+
 echo ""
-echo "Staged. Now stage any changed enforcement files and commit:"
-echo "  git add .now/"
+echo "Staged. Commit to record the update:"
 echo "  git commit -m \"Update enforcement source\""

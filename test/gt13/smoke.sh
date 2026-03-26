@@ -433,7 +433,7 @@ test_update_manifest() {
     assert_eq "$_staged_meta" "$_meta_tip" "staged meta gitlink matches new meta tip"
 
     # Committing the result should succeed (pre-commit passes with new manifest).
-    git add .now/src/check-composition.sh
+    # update-manifest.sh stages the enforcement files — no manual git add needed.
     rc=0
     git commit -q -m "Update enforcement source via update-manifest" 2>/dev/null || rc=$?
     assert_exit "$rc" 0 "commit with updated manifest succeeds"

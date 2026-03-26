@@ -214,15 +214,16 @@ meta manifest consistent:
 ```sh
 # copy or patch the updated files into .now/hooks/ and .now/src/ however you like
 sh .now/src/update-manifest.sh
-git add .now/
 git commit -m "Update enforcement source"
 ```
 
 `update-manifest.sh` reads the current working-tree files in `.now/hooks/` and
 `.now/src/`, creates a new commit on `meta` with a matching manifest, and stages
-the updated meta gitlink on `now`. Because the pre-commit hook reads the meta
-pin from the index, the new manifest is in place before the constraint check
-runs — so the commit succeeds without any manual plumbing.
+both the updated meta gitlink and the enforcement files it just manifested. The
+staging is atomic: manifest and source land together in the index. Because the
+pre-commit hook reads the meta pin from the index, the new manifest is in place
+before the constraint check runs — so the commit succeeds without any manual
+plumbing.
 
 ---
 
