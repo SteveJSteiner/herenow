@@ -15,13 +15,8 @@ Current constraints and boundaries of the Temporal Membrane template. These are 
 
 ## Enforcement installation is manual
 
-- `init.sh` seeds the `now` branch with stub hooks and copies enforcement source from the scaffold. After initialization, the hooks on `now` are functional — but only after `bootstrap.sh` activates `core.hooksPath`.
-- If enforcement source is updated on `provenance/scaffold` or `meta`, the operator must manually propagate changes to the active hooks on `now`. There is no automated sync mechanism.
-
-## No past/future branch tooling
-
-- The operator creates `past/*` and `future/*` branches manually. There is no command to add a past or future branch — the operator must create the branch, add the submodule entry to `.gitmodules` with the correct role and ancestor-constraint keys, and update the gitlink.
-- Removing a future branch requires manually editing `.gitmodules` and removing the gitlink. The enforcement layer validates the resulting state but does not assist with the editing.
+- `init.sh` seeds the `now` branch with real enforcement hooks and source from the scaffold, and generates an `enforcement-manifest` on the `meta` branch. After initialization, the hooks on `now` are functional — but only after `bootstrap.sh` activates `core.hooksPath`.
+- If enforcement source is updated on `provenance/scaffold` or `meta`, the operator must manually propagate changes to the active hooks on `now` and update the `enforcement-manifest` on `meta`. There is no automated sync mechanism.
 
 ## No multi-remote or fork workflow
 
@@ -46,6 +41,6 @@ The following decisions were left intentionally open during the prototype phase.
 
 ## Scope of test coverage
 
-- 162 assertions across 7 test suites (GT7, GT8a, GT8b, GT8c, GT12, GT13, GT15) plus dedicated immune-response and meta-consistency test harnesses.
+- Test suites in `test/` (GT7, GT8a, GT8b, GT8c, GT12, GT13, GT15) plus dedicated immune-response and meta-consistency test harnesses in `.now/tests/`.
 - Tests exercise the init-to-governed path, constraint enforcement, immune response, worktree provisioning, and fresh-repo acceptance.
 - Tests do not cover: multi-remote scenarios, non-POSIX platforms, git versions below 2.38, concurrent operator workflows, or large-scale submodule configurations.

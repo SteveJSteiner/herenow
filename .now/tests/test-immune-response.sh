@@ -73,6 +73,9 @@ setup_repo() {
     git init -q
     git config user.email "test@test.com"
     git config user.name "Test"
+    git config commit.gpgsign false
+    # Capture default branch name for portability.
+    _default_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "master")
 
     # Copy .now tree into the test repo.
     mkdir -p .now/hooks .now/src
@@ -231,7 +234,7 @@ test_ff_merge_violation() {
     git -c core.hooksPath=/dev/null commit -q --no-verify -m "bad on branch" -- .gitmodules 2>/dev/null || true
 
     # Go back to main and ff-merge.
-    git checkout -q main
+    git checkout -q -
     git merge -q bad-branch 2>/dev/null || true
 
     # post-merge should have auto-reverted.
@@ -255,7 +258,7 @@ test_noff_merge_violation() {
     git -c core.hooksPath=/dev/null commit -q --no-verify -m "bad on branch" 2>/dev/null || true
 
     # Diverge main so merge is non-ff.
-    git checkout -q main
+    git checkout -q -
     echo "diverge" > diverge.txt
     git add diverge.txt
     git commit -q -m "diverge main" 2>/dev/null || true
@@ -283,14 +286,15 @@ test_rebase_violation() {
     git -c core.hooksPath=/dev/null commit -q --no-verify -m "bad on feature" 2>/dev/null || true
 
     # Advance main so rebase has work to do.
-    git checkout -q main
+    git checkout -q -
+    _default_br=$(git symbolic-ref --short HEAD)
     echo "advance" > advance.txt
     git add advance.txt
     git commit -q -m "advance main" 2>/dev/null || true
 
     # Rebase feature onto main.
     git checkout -q feature
-    git rebase main 2>/dev/null || true
+    git rebase "$_default_br" 2>/dev/null || true
 
     # post-rewrite (rebase) should have tagged the violation.
     tag_list="$(git tag -l 'membrane/violation/*' 2>/dev/null)"
@@ -322,7 +326,7 @@ test_clean_merge() {
     git add branch.txt
     git commit -q -m "clean on branch" 2>/dev/null || true
 
-    git checkout -q main
+    git checkout -q -
     echo "main content" > main.txt
     git add main.txt
     git commit -q -m "clean on main" 2>/dev/null || true
@@ -359,7 +363,7 @@ test_conflict_merge_violation() {
     git -c core.hooksPath=/dev/null commit -q --no-verify -a -m "bad gitmodules on branch" 2>/dev/null || true
 
     # Diverge main so merge produces a conflict.
-    git checkout -q main
+    git checkout -q -
     echo "# different main version" > .gitmodules
     git add .gitmodules
     git commit -q -m "different gitmodules on main" 2>/dev/null || true

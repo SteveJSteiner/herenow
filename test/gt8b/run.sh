@@ -84,6 +84,7 @@ build_history() {
     git -C "$_repo" init -q
     git -C "$_repo" config user.email "test@test"
     git -C "$_repo" config user.name "test"
+    git -C "$_repo" config commit.gpgsign false
 
     # Root commit (empty, like membrane common root)
     git -C "$_repo" commit -q --allow-empty -m "root"

@@ -6,9 +6,10 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROVISIONER="$SCRIPT_DIR/../../.now/src/provision-worktrees.sh"
-INIT_SH="$SCRIPT_DIR/../../init.sh"
-VALIDATOR="$SCRIPT_DIR/../../.now/src/validate-gitmodules.sh"
+SCAFFOLD_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROVISIONER="$SCAFFOLD_DIR/.now/src/provision-worktrees.sh"
+INIT_SH="$SCAFFOLD_DIR/init.sh"
+VALIDATOR="$SCAFFOLD_DIR/.now/src/validate-gitmodules.sh"
 
 pass=0
 fail=0
@@ -114,13 +115,17 @@ assert_msg() {
     esac
 }
 
-# Create a fresh repo with one commit (init.sh needs HEAD)
+# Create a fresh repo with scaffold files in HEAD (init.sh requires .now/ in HEAD).
 new_repo() {
     _repo=$(new_dir)
     git -C "$_repo" init -q
     git -C "$_repo" config user.email "test@test"
     git -C "$_repo" config user.name "test"
-    git -C "$_repo" commit -q --allow-empty -m "initial"
+    git -C "$_repo" config commit.gpgsign false
+    # Copy scaffold enforcement files so init.sh step 5 can seed them.
+    cp -r "$SCAFFOLD_DIR/.now" "$_repo/.now"
+    git -C "$_repo" add .now
+    git -C "$_repo" commit -q -m "scaffold"
     printf '%s' "$_repo"
 }
 
@@ -252,6 +257,7 @@ PLAIN=$(new_dir)
 git -C "$PLAIN" init -q
 git -C "$PLAIN" config user.email "test@test"
 git -C "$PLAIN" config user.name "test"
+git -C "$PLAIN" config commit.gpgsign false
 git -C "$PLAIN" commit -q --allow-empty -m "initial"
 
 run_provision "$PLAIN"
@@ -281,10 +287,11 @@ echo ""
 echo "--- 8. Provisioner from non-now branch ---"
 
 REPO=$(new_repo)
+_scaffold_br=$(git -C "$REPO" symbolic-ref --short HEAD)
 run_init "$REPO"
 
-# Switch to main (now's .gitmodules won't be in working tree)
-git -C "$REPO" checkout -q main
+# Switch to scaffold branch (now's .gitmodules won't be in working tree)
+git -C "$REPO" checkout -q "$_scaffold_br"
 
 run_provision "$REPO"
 assert_eq "exit code 0" "$LAST_RC" "0"
@@ -333,9 +340,11 @@ REPO=$(new_dir)
 git -C "$REPO" init -q
 git -C "$REPO" config user.email "test@test"
 git -C "$REPO" config user.name "test"
+git -C "$REPO" config commit.gpgsign false
+cp -r "$SCAFFOLD_DIR/.now" "$REPO/.now"
 echo "template" > "$REPO/README.md"
-git -C "$REPO" add README.md
-git -C "$REPO" commit -q -m "template commit"
+git -C "$REPO" add .now README.md
+git -C "$REPO" commit -q -m "scaffold"
 run_init "$REPO"
 
 run_provision "$REPO"

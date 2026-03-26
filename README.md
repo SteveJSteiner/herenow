@@ -80,8 +80,22 @@ both. See [What bootstrap.sh does](#what-bootstrapsh-does) for details.
 
 You are on the `now` branch. `core.hooksPath` points to `.now/hooks/`. The
 hooks in `.now/hooks/` are the real enforcement hooks sourced from the scaffold.
-`.now/src/` contains the constraint evaluators. The `meta/` submodule is
-initialized.
+`.now/src/` contains the constraint evaluators and operator helpers. The `meta/`
+submodule is initialized. The first governed commit will succeed: `init.sh`
+step 6 seeds an `enforcement-manifest` on `meta` so the meta-consistency check
+passes out of the box.
+
+### Optional: provision worktrees
+
+If you want each branch checked out simultaneously in its own directory:
+
+```sh
+sh .now/src/provision-worktrees.sh
+```
+
+This creates `wt/<name>/` for each branch declared in `.gitmodules`. It is
+idempotent and optional — enforcement works without worktrees. See
+[Worktree provisioning](#worktree-provisioning) for details.
 
 ---
 
@@ -171,6 +185,8 @@ The enforcement source on `provenance/scaffold` contains:
 - `.now/src/check-past-monotonicity.sh` — past pin ancestry check
 - `.now/src/check-future-grounding.sh` — future pin ancestry check
 - `.now/src/check-meta-consistency.sh` — enforcement manifest verification
+- `.now/src/provision-worktrees.sh` — optional worktree provisioner
+- `.now/src/create-past.sh`, `create-future.sh`, `advance-past.sh`, `graduate-future.sh` — operator helpers
 - `.now/hooks/pre-commit`, `pre-merge-commit` — the pre-hooks
 - `.now/hooks/post-commit`, `post-merge`, `post-rewrite` — the post-hooks
 
@@ -179,9 +195,17 @@ The enforcement source on `provenance/scaffold` contains:
 these files are present in the working tree and `core.hooksPath` points at
 `.now/hooks/`.
 
+`init.sh` step 6 also generates an `enforcement-manifest` on the `meta` branch.
+The manifest lists every file in `.now/hooks/` and `.now/src/` with its blob
+hash. `check-meta-consistency.sh` reads this manifest on every governed commit
+and compares each listed file against the working tree. Because the manifest is
+generated from the files that step 5 just committed, the check passes on the
+first governed commit without any manual setup.
+
 If you later update the enforcement source — for example by pulling changes from
 an upstream template — those changes must be manually re-propagated to the `now`
-branch. There is no automated sync mechanism for updates.
+branch and the `enforcement-manifest` updated on `meta`. There is no automated
+sync mechanism for updates.
 
 ---
 
@@ -192,7 +216,7 @@ After init, these branches exist:
 | Branch | Role | What it contains |
 |--------|------|-----------------|
 | `now` | Present composition | Gitlink pins, enforcement hooks (`.now/hooks/`), enforcement source (`.now/src/`), `bootstrap.sh`, planning stubs, meta submodule |
-| `meta` | Self-governance | A README; intended to carry enforcement tooling when populated |
+| `meta` | Self-governance | A README and an `enforcement-manifest` listing the blob hashes of every enforcement file |
 | `provenance/scaffold` | Provenance | Snapshot of the template state before init — contains the full enforcement source |
 | `refs/membrane/root` | Shared origin | An empty commit; the common ancestor of all branches |
 
@@ -384,78 +408,65 @@ violated state to a remote. See [Known limitations](#known-limitations-and-discr
 
 ## Adding past and future branches
 
-There is no tooling to create past or future branches. The operator does this
-manually.
+Four helper scripts in `.now/src/` handle the git plumbing. Each one stages
+changes and tells you what to commit; the `pre-commit` hook validates the result
+before it lands.
 
 ### Creating a past branch
 
 ```sh
-# Create the branch from wherever you want past history to start.
-git branch past/my-work <some-commit>
+sh .now/src/create-past.sh my-work <some-commit>
+git commit -m "Add past/my-work"
 ```
 
-Then add the submodule entry to `.gitmodules` on the `now` branch. The exact
-key names are critical — the validator reads `role` and `ancestor-constraint`
-literally:
-
-```ini
-[submodule "past/my-work"]
-    path = past/my-work
-    url = ./
-    role = past
-```
-
-Then stage the gitlink (the submodule pointer to the commit you want to pin):
-
-```sh
-git update-index --add --cacheinfo 160000,<commit-sha>,past/my-work
-```
-
-Commit. If enforcement source is active, `pre-commit` will run the full
-constraint suite before accepting the commit.
+`create-past.sh` creates the `past/my-work` branch at `<some-commit>` (or HEAD
+if omitted), adds the `[submodule "past/my-work"]` entry to `.gitmodules` with
+the correct keys (`path`, `url`, `role = past`), and stages the gitlink. The
+validator checks `role` and `ancestor-constraint` literally — using any other
+key name will fail rule 1 or rule 2 of `validate-gitmodules.sh`.
 
 ### Creating a future branch
 
-A future branch must share non-trivial history with an existing past branch —
-meaning they must have a common ancestor that is not the empty root commit. The
-simplest way is to branch from the past branch:
+A future branch must share non-trivial history with its declared past — a common
+ancestor that is not the empty membrane root. Branching from the past tip (the
+default) satisfies this automatically:
 
 ```sh
-git branch future/my-speculation past/my-work
+sh .now/src/create-future.sh my-speculation past/my-work
+git commit -m "Add future/my-speculation"
 ```
 
-Add the submodule entry. A future branch **must** have an `ancestor-constraint`
-key naming the past submodule it descends from:
+Supply a third argument to start from a specific commit instead of the past tip.
+`create-future.sh` writes the `ancestor-constraint = past/my-work` key for you.
+If the future pin has no non-trivial common ancestor with the declared past pin,
+`check-future-grounding.sh` will reject the commit.
 
-```ini
-[submodule "future/my-speculation"]
-    path = future/my-speculation
-    url = ./
-    role = future
-    ancestor-constraint = past/my-work
-```
+### Advancing a past pin
 
-The `ancestor-constraint` value must match the name of an existing submodule
-with `role = past`. Using any other string will fail `validate-gitmodules.sh`
-rule 2.
-
-Stage the gitlink and commit. If the future pin does not share a non-trivial
-common ancestor with the named past pin, `check-future-grounding.sh` will
-reject the commit.
-
-### Advancing pins
-
-To advance a past pin (record that the past branch has moved forward):
+When commits land on a past branch and you want `now` to record the advance:
 
 ```sh
-# On your past branch, make the new commits.
-# Then, on now:
-git update-index --add --cacheinfo 160000,<new-commit-sha>,past/my-work
+sh .now/src/advance-past.sh past/my-work <new-commit>
 git commit -m "Advance past/my-work"
 ```
 
-If the new SHA is not a descendant of the old pin, `check-past-monotonicity.sh`
+If the new commit is not a descendant of the current pin, `check-past-monotonicity.sh`
 will reject the commit.
+
+### Graduating a future into its past
+
+When work on a future branch is ready to settle, advance the past pin to the new
+tip and remove the future from the composition atomically:
+
+```sh
+sh .now/src/graduate-future.sh future/my-speculation <new-past-commit>
+git commit -m "Graduate future/my-speculation into past/my-work"
+```
+
+`graduate-future.sh` reads `ancestor-constraint` from `.gitmodules` to identify
+the past submodule, advances its pin, removes the future's gitlink and
+`.gitmodules` entry, and stages everything. The past monotonicity check still
+runs — `<new-past-commit>` must descend from the current past pin.
 
 ---
 
@@ -483,10 +494,11 @@ notice.
 
 ### Manual propagation for enforcement source updates
 
-`init.sh` seeds the `now` branch with the enforcement source from the scaffold.
-If the source is later updated on `provenance/scaffold` or `meta`, those updates
-do not automatically appear on `now`. The operator must re-propagate them
-manually. There is no automated sync mechanism.
+`init.sh` seeds the `now` branch with the enforcement source from the scaffold,
+and seeds an `enforcement-manifest` on `meta` listing each file's blob hash. If
+the source is later updated — for example by pulling changes from an upstream
+template — those updates must be manually re-propagated to the `now` branch and
+the manifest updated on `meta`. There is no automated sync mechanism.
 
 ### Enforcement is local only
 
@@ -494,19 +506,6 @@ The hooks run via `core.hooksPath`. There is no CI integration. If
 `core.hooksPath` is overridden by the operator or by tooling (e.g., an IDE),
 enforcement stops silently. The immune response cannot prevent a `git push
 --force` of violated state to a remote.
-
-### No past/future branch tooling
-
-The operator creates and wires past and future branches manually. This includes
-editing `.gitmodules`, staging gitlinks, and understanding which key names the
-validator accepts. There is no command to do this automatically.
-
-### Meta branch requires manual setup
-
-The `meta` branch is initialized with only a README. For the meta-consistency
-check to pass, an `enforcement-manifest` must be committed to the `meta` branch,
-listing each enforcement file and its expected blob hash. Populating this
-manifest is not automated.
 
 ### Single past branch tested; multiple past untested
 

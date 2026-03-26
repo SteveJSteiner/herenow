@@ -77,6 +77,7 @@ build_history() {
     git -C "$_repo" init -q
     git -C "$_repo" config user.email "test@test"
     git -C "$_repo" config user.name "test"
+    git -C "$_repo" config commit.gpgsign false
 
     echo a > "$_repo/f"
     git -C "$_repo" add f
