@@ -19,7 +19,7 @@ operation (`post-commit`). The constraint logic is POSIX shell, readable in
 1. [Getting started](#getting-started)
 2. [What init.sh creates](#what-initsh-creates)
 3. [What bootstrap.sh does](#what-bootstrapsh-does)
-4. [The enforcement gap](#the-enforcement-gap)
+4. [Where the enforcement source lives](#where-the-enforcement-source-lives)
 5. [Branch roles](#branch-roles)
 6. [The enforcement chain](#the-enforcement-chain)
 7. [What each check verifies](#what-each-check-verifies)
@@ -95,7 +95,7 @@ initialized.
 | 2 | Snapshot of the pre-init state | `refs/heads/provenance/scaffold` |
 | 3 | The `now` branch, pointing at the root | `refs/heads/now` |
 | 4 | The `meta` branch, pointing at the root | `refs/heads/meta` |
-| 5 | Hook stubs, `bootstrap.sh`, `.gitmodules`, `.gitignore` onto `now` | commit on `refs/heads/now` |
+| 5 | Enforcement hooks (`.now/hooks/`), enforcement source (`.now/src/`), `bootstrap.sh`, `.gitmodules`, `.gitignore` onto `now` | commit on `refs/heads/now` |
 | 6 | A README onto `meta` | commit on `refs/heads/meta` |
 | 7 | Planning files and the meta gitlink onto `now` | commit on `refs/heads/now` |
 | 8 | Checkout of `now` | working tree |
@@ -171,17 +171,17 @@ The enforcement source on `provenance/scaffold` contains:
 - `.now/src/check-past-monotonicity.sh` — past pin ancestry check
 - `.now/src/check-future-grounding.sh` — future pin ancestry check
 - `.now/src/check-meta-consistency.sh` — enforcement manifest verification
-- `.now/hooks/pre-commit` — the pre-commit hook
-- `.now/hooks/post-commit`, `post-merge`, `post-rewrite`, `pre-merge-commit` — the post-hooks
+- `.now/hooks/pre-commit`, `pre-merge-commit` — the pre-hooks
+- `.now/hooks/post-commit`, `post-merge`, `post-rewrite` — the post-hooks
 
 `init.sh` step 5 reads these files directly from the scaffold's HEAD tree (via
 `git ls-tree`) and commits them onto the `now` branch. After init and bootstrap,
 these files are present in the working tree and `core.hooksPath` points at
 `.now/hooks/`.
 
-If the enforcement source is later updated on `provenance/scaffold`, the
-operator must re-propagate changes manually to the `now` branch. There is no
-automated sync mechanism for updates.
+If you later update the enforcement source — for example by pulling changes from
+an upstream template — those changes must be manually re-propagated to the `now`
+branch. There is no automated sync mechanism for updates.
 
 ---
 
@@ -191,7 +191,7 @@ After init, these branches exist:
 
 | Branch | Role | What it contains |
 |--------|------|-----------------|
-| `now` | Present composition | Gitlink pins, stub hooks, `bootstrap.sh`, planning stubs, meta submodule |
+| `now` | Present composition | Gitlink pins, enforcement hooks (`.now/hooks/`), enforcement source (`.now/src/`), `bootstrap.sh`, planning stubs, meta submodule |
 | `meta` | Self-governance | A README; intended to carry enforcement tooling when populated |
 | `provenance/scaffold` | Provenance | Snapshot of the template state before init — contains the full enforcement source |
 | `refs/membrane/root` | Shared origin | An empty commit; the common ancestor of all branches |
@@ -300,7 +300,7 @@ declared. Populating this manifest is part of the operator's setup work.
 
 ## Violation responses
 
-The three hooks respond differently to violations because the situations call
+The hooks respond differently to violations because the situations call
 for different responses.
 
 ### `pre-commit` and `pre-merge-commit` — block

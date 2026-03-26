@@ -71,8 +71,9 @@ step3_done() { check_membrane_branch now; }
 step4_done() { check_membrane_branch meta; }
 
 step5_done() {
-    _output=$(git ls-tree "refs/heads/now" -- .now/hooks/ 2>/dev/null) || return 1
-    [ -n "$_output" ]
+    _hooks=$(git ls-tree "refs/heads/now" -- .now/hooks/ 2>/dev/null) || return 1
+    _src=$(git ls-tree "refs/heads/now" -- .now/src/ 2>/dev/null) || return 1
+    [ -n "$_hooks" ] && [ -n "$_src" ]
 }
 
 step6_done() {
@@ -154,7 +155,8 @@ if ! step5_done; then
     # Hooks and enforcement source from scaffold (HEAD tree).
     # The blobs are already in the object store — just reference them.
     git ls-tree -r HEAD -- .now/hooks/ .now/src/ > "$TEMP_ENTRIES" 2>/dev/null || true
-    if [ ! -s "$TEMP_ENTRIES" ]; then
+    if ! grep -q '\.now/hooks/' "$TEMP_ENTRIES" 2>/dev/null || \
+       ! grep -q '\.now/src/'   "$TEMP_ENTRIES" 2>/dev/null; then
         echo "Error: .now/hooks/ and .now/src/ not found in HEAD." >&2
         echo "  Run init.sh from the scaffold branch (main), not from now." >&2
         exit 1
