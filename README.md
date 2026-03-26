@@ -64,25 +64,61 @@ using git plumbing commands (no working-tree writes) and ends by checking out
 the `now` branch. See [What init.sh creates](#what-initsh-creates) for the
 full list of refs and commits it produces.
 
-### Step 3: Bootstrap governance
+### Step 3: Install enforcement source onto `now`
+
+After `git checkout now`, the working tree no longer contains `.now/src/` or
+real hooks — only the stubs seeded by `init.sh`. Enforcement requires the real
+source to be committed onto the `now` branch. The `test/gt13/smoke.sh` suite
+demonstrates the canonical approach:
+
+```sh
+# Copy enforcement source from the scaffold into your working tree.
+# Run this from the now branch, immediately after init.sh.
+SCAFFOLD=$(git rev-parse provenance/scaffold)
+
+mkdir -p .now/src
+for f in check-composition.sh validate-gitmodules.sh \
+          check-past-monotonicity.sh check-future-grounding.sh \
+          immune-response.sh check-meta-consistency.sh \
+          provision-worktrees.sh; do
+    git show "$SCAFFOLD:.now/src/$f" > ".now/src/$f"
+done
+
+for h in pre-commit pre-merge-commit post-commit post-merge post-rewrite; do
+    git show "$SCAFFOLD:.now/hooks/$h" > ".now/hooks/$h"
+    chmod +x ".now/hooks/$h"
+done
+
+git add .now/src/ .now/hooks/
+git commit -m "Install enforcement source"
+```
+
+This copies the enforcement source from `provenance/scaffold` into the `now`
+branch working tree and commits it. Until this step, the hooks in `.now/hooks/`
+are stubs that `exit 0`.
+
+You also need an `enforcement-manifest` on the `meta` branch before the
+meta-consistency check will pass. See
+[Meta branch requires manual setup](#meta-branch-requires-manual-setup).
+
+### Step 4: Bootstrap governance
 
 ```sh
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` is embedded in `init.sh` as a heredoc and seeded onto the `now`
-branch during step 5 of init. Running it activates `core.hooksPath`,
-initializes the `meta` submodule, and verifies both. See
-[What bootstrap.sh does](#what-bootstrapsh-does) for details.
+`bootstrap.sh` is seeded onto the `now` branch by `init.sh` step 5. Running it
+activates `core.hooksPath`, initializes the `meta` submodule, and verifies
+both. See [What bootstrap.sh does](#what-bootstrapsh-does) for details.
 
-### What you have after init + bootstrap
+Run bootstrap **after** installing the enforcement source in step 3. The hooks
+`core.hooksPath` points at must be the real hooks, not the stubs.
 
-You are on the `now` branch. `core.hooksPath` points to `.now/hooks/`. There
-is a `meta/` directory containing the initialized meta submodule. The five
-hooks in `.now/hooks/` are executable.
+### What you have after init + install + bootstrap
 
-**Read the next section before assuming those hooks enforce anything.** They
-don't — not yet.
+You are on the `now` branch. `core.hooksPath` points to `.now/hooks/`. The
+hooks in `.now/hooks/` are the real enforcement hooks (not stubs). `.now/src/`
+contains the constraint evaluators. The `meta/` submodule is initialized.
 
 ---
 
@@ -169,14 +205,12 @@ non-empty before exiting. It is safe to re-run.
 
 ## The enforcement gap
 
-This is the most important thing to understand about the setup.
+This is the most important thing to understand about the setup. It explains
+why step 3 above exists.
 
-After `init.sh` and `bootstrap.sh`, the hooks in `.now/hooks/` are stubs that
-exit 0. They enforce nothing. `core.hooksPath` points at them, so git will call
-them — and they will do nothing.
-
-The full enforcement source lives on `provenance/scaffold` (which points at the
-same commit as `main` before init). It contains:
+After `init.sh` alone, the hooks in `.now/hooks/` are stubs that exit 0. They
+enforce nothing. The full enforcement source lives on `provenance/scaffold`
+(which points at the same commit as `main` before init). It contains:
 
 - `.now/src/immune-response.sh` — the shared response library sourced by all post-hooks
 - `.now/src/check-composition.sh` — the orchestrator that runs all four checks
@@ -188,11 +222,12 @@ same commit as `main` before init). It contains:
 - `.now/hooks/post-commit`, `post-merge`, `post-rewrite`, `pre-merge-commit` — the real post-hooks
 
 After `git checkout now`, these files are not present in the working tree. The
-`now` branch was seeded only with stub hooks. To activate real enforcement, the
-operator must propagate the enforcement source from `provenance/scaffold` to the
-`now` branch. There is no automated step for this — the KNOWN-LIMITATIONS file
-describes this as manual work and notes that "there is no automated sync
-mechanism."
+`now` branch was seeded only with stub hooks. The operator must copy the
+enforcement source from `provenance/scaffold` onto the `now` branch and commit
+it before running bootstrap — that is step 3 in the Getting Started section
+above. There is no automated mechanism for this propagation; if the enforcement
+source is later updated on `provenance/scaffold`, the operator must re-propagate
+it manually.
 
 The rest of this document describes the enforcement source as it exists on
 `provenance/scaffold`. When you read about what a hook "does," that refers to
@@ -496,18 +531,25 @@ notice.
 
 ## Known limitations and discrepancies
 
-### Discrepancy: KNOWN-LIMITATIONS describes stubs as functional
+### Discrepancy: KNOWN-LIMITATIONS misattributes enforcement propagation to init.sh
 
 `KNOWN-LIMITATIONS.md` states: "init.sh seeds the `now` branch with stub hooks
 and copies enforcement source from the scaffold. After initialization, the hooks
 on `now` are functional."
 
-This is not accurate. `init.sh` seeds the `now` branch with stub hooks that
-`exit 0`. It does not copy the enforcement source. `bootstrap.sh` step 2 says
-explicitly: "No source exists yet (D18/D19 open). When `.now/src/` appears,
-build here." After init + bootstrap, the hooks on `now` do nothing. The
-enforcement source on `provenance/scaffold` is not active until it is propagated
-to the `now` branch, and there is no automated step for this.
+This is not accurate as written. `init.sh` seeds the `now` branch with stub
+hooks that `exit 0`. It does not copy the enforcement source — `bootstrap.sh`
+step 2 confirms this explicitly: "No source exists yet (D18/D19 open). When
+`.now/src/` appears, build here."
+
+The propagation is **by design**, not a bug. The operator is expected to copy
+the enforcement source from `provenance/scaffold` onto `now` and commit it
+before running bootstrap. The `test/gt13/smoke.sh` suite demonstrates this step
+explicitly (lines 154–199). KNOWN-LIMITATIONS attributes this copying to
+`init.sh` when it is actually a separate manual step. The second sentence of
+that same KNOWN-LIMITATIONS section — "the operator must manually propagate
+changes" — accidentally confirms this, but applies it only to updates rather
+than the initial installation.
 
 ### Enforcement is local only
 
