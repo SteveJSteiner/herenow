@@ -74,6 +74,13 @@ if [ -z "$_meta_name" ]; then
     exit 1
 fi
 
+# Read the submodule path (rule 5 of validate-gitmodules.sh enforces path==name,
+# but read it explicitly to stay consistent with check-meta-consistency.sh).
+_meta_path=$(git config --file "$GITMODULES" "submodule.$_meta_name.path" 2>/dev/null || true)
+if [ -z "$_meta_path" ]; then
+    _meta_path="$_meta_name"
+fi
+
 # --- Get current meta tip ---
 
 _meta_tip=$(git rev-parse "refs/heads/meta" 2>/dev/null) || {
@@ -129,8 +136,8 @@ echo "  meta -> $_commit"
 
 # --- Stage new meta gitlink on now ---
 
-git update-index --add --cacheinfo "160000,$_commit,$_meta_name"
-echo "  Staged gitlink $_meta_name -> $_commit"
+git update-index --add --cacheinfo "160000,$_commit,$_meta_path"
+echo "  Staged gitlink $_meta_path -> $_commit"
 
 echo ""
 echo "Staged. Now stage any changed enforcement files and commit:"
