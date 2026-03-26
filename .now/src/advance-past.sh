@@ -33,6 +33,16 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
     exit 1
 fi
 
+_current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+if [ -z "$_current_branch" ]; then
+    echo "Error: detached HEAD — run from the now branch." >&2
+    exit 1
+fi
+if [ "$_current_branch" != "now" ]; then
+    echo "Error: must run from the now branch (current: '$_current_branch')." >&2
+    exit 1
+fi
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 GITMODULES="$REPO_ROOT/.gitmodules"
 
