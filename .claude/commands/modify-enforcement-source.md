@@ -14,6 +14,7 @@ Use this when changing enforcement source under `.now/hooks/*` or `.now/src/*`.
 ## Preconditions
 
 - On `now` in an initialized, bootstrapped repo.
+- A `meta` gitlink is present in the index.
 - Intended changes are enforcement-source changes (optionally with companion docs).
 
 ## Steps
@@ -56,7 +57,11 @@ Use this when changing enforcement source under `.now/hooks/*` or `.now/src/*`.
 
 ## Failure protocol
 
-- If pre-update check unexpectedly passes, confirm you actually edited enforcement files.
+- If pre-update check unexpectedly passes, first verify a `meta` gitlink is present in the index:
+  ```sh
+  git ls-files --stage -- meta
+  ```
+  If no staged gitlink is present, stop: governed state is incomplete or damaged and must be repaired before proceeding. If the gitlink is present, confirm you actually edited enforcement files.
 - If pre-update check fails on untouched files, stop and diagnose baseline consistency before proceeding.
 - If post-update check still fails, stop and inspect:
   - `git ls-files --stage meta`

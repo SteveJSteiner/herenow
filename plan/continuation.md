@@ -131,4 +131,4 @@ Audit each command line-by-line for:
 - normalization of bypass behavior,
 - prose that violates the established register.
 
-<!-- continuation refreshed after commit 28fabd0; GT17 remains ACTIVE -->
+<!-- continuation refreshed after commit 1e81ef4; GT17 remains ACTIVE -->
