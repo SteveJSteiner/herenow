@@ -1,0 +1,64 @@
+# `/{{acts.show}}`
+
+## When this command applies
+
+Use this to see where things stand. Run before acting. Run after acting.
+
+This is the read-only inspection act. It classifies everything into four categories: {{nouns.floor}}, {{nouns.claim}}, {{nouns.experiment}}, and {{nouns.blocked}}.
+
+## Truth sources
+
+- Routes to: `substrate/membrane-status`
+- checker: `.now/src/check-composition.sh`
+- checker: `.now/src/validate-gitmodules.sh`
+- checker: `.now/src/check-past-monotonicity.sh`
+- checker: `.now/src/check-future-grounding.sh`
+- checker: `.now/src/check-meta-consistency.sh`
+
+## Preconditions
+
+- Run from repository root.
+- This act does not edit refs, index, or working tree.
+
+## Steps
+
+1. Detect branch and initialization state:
+   ```sh
+   git symbolic-ref --short HEAD 2>/dev/null || echo "detached"
+   if git rev-parse --verify refs/membrane/root >/dev/null 2>&1; then
+     echo "state: initialized"
+   else
+     echo "state: scaffold/uninitialized"
+   fi
+   ```
+2. If uninitialized, report scaffold status and stop.
+3. If initialized, inspect bootstrap and enforcement state.
+4. Run composition checks when eligible (on `now`, bootstrapped, `.gitmodules` present).
+5. Classify output into four categories:
+
+   | Category | Meaning | Git shows |
+   |---|---|---|
+   | **{{nouns.floor}}** | Work others rely on | `past/*` submodule pins |
+   | **{{nouns.claim}}** | What is currently being shaped | staged/working changes on `now` |
+   | **{{nouns.experiment}}** | Active explorations not yet load-bearing | `future/*` submodule pins |
+   | **{{nouns.blocked}}** | Boundaries that would reject a commit | failing composition checks |
+
+## Verification
+
+- State is clearly classified.
+- Each {{nouns.floor}} line shows its pinned SHA.
+- Each {{nouns.experiment}} shows its grounding constraint.
+- Any {{nouns.blocked}} condition names the specific check that failed.
+
+## Failure protocol
+
+- If initialized but `.now/src` is missing, stop and inspect initialization.
+- If bootstrapped expectations fail, direct to `substrate/init-bootstrap-first-commit`.
+
+## Evidence to report
+
+- Branch name and state classification.
+- {{nouns.floor}} lines with pinned SHAs.
+- {{nouns.experiment}} lines with grounding constraints.
+- Any {{nouns.blocked}} conditions with checker output.
+- `core.hooksPath` value.

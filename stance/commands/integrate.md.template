@@ -1,0 +1,68 @@
+# `/{{acts.integrate}}`
+
+## When this command applies
+
+Use this to pull nearly-done {{nouns.experiment}} work onto the working surface ({{nouns.claim}}). This is not {{acts.finish}} — the work is not yet load-bearing. The {{nouns.experiment}} remains open until the work is explicitly made {{nouns.floor}}.
+
+Integration means: take content from an {{nouns.experiment}} branch and apply it on the `now` working surface where it can be tested, adjusted, and committed as {{nouns.claim}}.
+
+## Truth sources
+
+- Works with: `future/*` branch content
+- checker: `.now/src/check-composition.sh`
+- commit flow: `substrate/now-commit`
+
+## Preconditions
+
+- On `now`.
+- Bootstrap complete.
+- Target {{nouns.experiment}} exists (a `future/*` submodule with `role = future`).
+- The {{nouns.experiment}} has content worth pulling onto the working surface.
+
+## Steps
+
+1. Identify the {{nouns.experiment}} to integrate:
+   ```sh
+   git config --file .gitmodules --get-regexp 'submodule\..*\.role' | grep 'future$'
+   ```
+2. Inspect the {{nouns.experiment}} content:
+   ```sh
+   # View what the experiment branch contains
+   git log --oneline future/<name> | head -20
+   git diff now...future/<name> --stat
+   ```
+3. Cherry-pick, merge, or manually apply the relevant changes onto `now`:
+   ```sh
+   # Option A: cherry-pick specific commits
+   git cherry-pick <commit-sha>
+   # Option B: read and manually apply
+   git show future/<name>:<file> > <file>
+   ```
+   The {{nouns.experiment}} branch and its submodule declaration remain intact. Only the content moves onto the working surface.
+4. Stage the integrated changes.
+5. Run composition check:
+   ```sh
+   sh .now/src/check-composition.sh .gitmodules
+   ```
+6. Commit via `/{{acts.save}}`.
+
+## Verification
+
+- Content from the {{nouns.experiment}} is now on the `now` working surface as {{nouns.claim}}.
+- The {{nouns.experiment}} submodule declaration is unchanged.
+- Composition still passes.
+- The {{nouns.experiment}} branch still exists — it is not removed until {{acts.finish}}.
+
+## Failure protocol
+
+- Stop if the {{nouns.experiment}} does not exist.
+- Stop if cherry-pick or merge creates conflicts that cannot be resolved cleanly.
+- Stop if composition fails after integration.
+- Do not remove the {{nouns.experiment}} declaration — that is the job of {{acts.finish}}.
+
+## Evidence to report
+
+- Which {{nouns.experiment}} was integrated.
+- What content was pulled onto the working surface.
+- Composition check output.
+- Commit SHA.

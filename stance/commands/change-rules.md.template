@@ -1,0 +1,66 @@
+# `/{{acts.change_rules}}`
+
+## When this command applies
+
+Use this when modifying the enforcement apparatus itself — the hooks, checkers, and helper scripts under `.now/hooks/*` and `.now/src/*`. Rule changes alter what the system permits. The enforcement source and the signed rule set must stay in sync.
+
+## Truth sources
+
+- Routes to: `substrate/modify-enforcement-source`
+- checker: `.now/src/check-meta-consistency.sh`
+- helper: `.now/src/update-manifest.sh`
+- checker: `.now/src/check-composition.sh`
+
+## Preconditions
+
+- On `now` in an initialized, bootstrapped repo.
+- A `meta` gitlink is present in the index.
+- Intended changes are enforcement-source changes (`.now/hooks/*`, `.now/src/*`).
+
+## Steps
+
+1. Edit enforcement files.
+2. Record which files changed:
+   ```sh
+   git status --short .now/hooks .now/src
+   ```
+3. Run meta consistency check (expected to fail after edits):
+   ```sh
+   sh .now/src/check-meta-consistency.sh .gitmodules
+   ```
+   Confirm the checker names exactly the file(s) you edited. If it names untouched files, stop — that is pre-existing inconsistency.
+4. Regenerate manifest atomically:
+   ```sh
+   sh .now/src/update-manifest.sh
+   ```
+5. Verify meta consistency now passes:
+   ```sh
+   sh .now/src/check-meta-consistency.sh .gitmodules
+   ```
+6. Run full composition check:
+   ```sh
+   sh .now/src/check-composition.sh .gitmodules
+   ```
+7. Commit via `/{{acts.save}}`.
+
+## Verification
+
+- Pre-update consistency failure was observed and explained.
+- Mismatch list matches only intentionally edited files.
+- Post-update consistency passes.
+- Commit accepted and not auto-reverted.
+
+## Failure protocol
+
+- If pre-update check unexpectedly passes, verify a `meta` gitlink is present in the index.
+- If pre-update check fails on untouched files, stop — diagnose baseline consistency first.
+- If post-update check still fails, inspect staged state before retrying.
+- "enforcement source does not match the signed rule set" — this is the diagnostic you will see.
+
+## Evidence to report
+
+- Edited-file list.
+- Before/after consistency check outputs.
+- `update-manifest.sh` output including new meta commit SHA.
+- Staged meta gitlink and enforcement diff.
+- Final commit SHA.

@@ -1,0 +1,69 @@
+# `/{{acts.save}}`
+
+## When this command applies
+
+Use this to commit the current {{nouns.claim}} under governance. The enforcement checks run automatically. If any check fails, the commit is rejected.
+
+This is the bottom-out commit flow. Other acts end here unless they already perform the final commit.
+
+## Truth sources
+
+- Routes to: `substrate/now-commit`
+- hook: `.now/hooks/pre-commit`
+- hook: `.now/hooks/post-commit`
+- checker: `.now/src/check-composition.sh`
+- response: `.now/src/immune-response.sh`
+
+## Preconditions
+
+- On `now`.
+- Bootstrap complete (`core.hooksPath=.now/hooks`).
+- Staged diff reviewed and intentional.
+- No bypass flags (`--no-verify`).
+
+## Steps
+
+1. Confirm branch and bootstrap:
+   ```sh
+   test "$(git symbolic-ref --short HEAD)" = "now"
+   test "$(git config core.hooksPath)" = ".now/hooks"
+   ```
+2. Review staged state:
+   ```sh
+   git status --short
+   git diff --cached --stat
+   ```
+3. Preflight composition check:
+   ```sh
+   test -f .gitmodules && sh .now/src/check-composition.sh .gitmodules
+   ```
+4. Commit:
+   ```sh
+   git commit -m "<message>"
+   ```
+5. Verify no immune response fired:
+   ```sh
+   git log --oneline -n 5
+   ```
+6. Post-commit composition check:
+   ```sh
+   test -f .gitmodules && sh .now/src/check-composition.sh .gitmodules
+   ```
+
+## Verification
+
+- Pre-commit hook accepted the commit.
+- No post-commit auto-revert occurred.
+- Post-commit composition still passes.
+
+## Failure protocol
+
+- If pre-commit blocks: the commit is {{nouns.blocked}}. Read the checker output, fix the condition, retry.
+- If auto-revert occurs: inspect the violating delta, restage corrected change, recommit.
+- If post-commit composition fails: treat as unresolved defect, stop.
+
+## Evidence to report
+
+- Staged diff summary.
+- Commit SHA and recent log.
+- Pre/post checker outputs.

@@ -1,0 +1,75 @@
+# `/{{acts.finish}}`
+
+## When this command applies
+
+Use this to make finished work load-bearing. After this, the work is {{nouns.floor}} — others may depend on it. This is the critical transition.
+
+This act settles an {{nouns.experiment}} into its constrained {{nouns.floor}} line, advancing the {{nouns.floor}} forward and removing the {{nouns.experiment}}.
+
+## Truth sources
+
+- Routes to: `substrate/graduate-future` (and implicitly `substrate/advance-past`)
+- helper: `.now/src/graduate-future.sh`
+- checker: `.now/src/validate-gitmodules.sh`
+- checker: `.now/src/check-past-monotonicity.sh`
+- checker: `.now/src/check-composition.sh`
+
+## Preconditions
+
+- On `now`.
+- Bootstrap complete.
+- Target {{nouns.experiment}} exists with `role = future` and `ancestor-constraint`.
+- The work in the {{nouns.experiment}} is ready to become load-bearing.
+- Replacement {{nouns.floor}} commit is chosen.
+
+## Steps
+
+All of the following must succeed atomically. If any step fails, the whole operation fails.
+
+1. Run the substrate helper:
+   ```sh
+   sh .now/src/graduate-future.sh <future-submodule> <new-past-commit>
+   ```
+   This atomically:
+   - Advances the constrained {{nouns.floor}} line forward.
+   - Removes the {{nouns.experiment}} gitlink and `.gitmodules` entry.
+   - Stages both changes.
+
+2. Inspect staged effects:
+   ```sh
+   git diff --cached -- .gitmodules
+   git ls-files --stage -- <future-submodule>
+   ```
+   The {{nouns.experiment}} gitlink should be gone. The constrained {{nouns.floor}} gitlink should show the new SHA.
+
+3. Run checks:
+   ```sh
+   sh .now/src/validate-gitmodules.sh .gitmodules
+   sh .now/src/check-past-monotonicity.sh .gitmodules
+   sh .now/src/check-composition.sh .gitmodules
+   ```
+
+4. Commit via `/{{acts.save}}` or direct `git commit`.
+
+## Verification
+
+- {{nouns.experiment}} entry is removed from `.gitmodules`.
+- {{nouns.experiment}} gitlink is removed from index.
+- Constrained {{nouns.floor}} gitlink points at the new SHA.
+- Past monotonicity passes ({{nouns.floor}} only moved forward).
+- Full composition passes.
+
+## Failure protocol
+
+- Stop if the {{nouns.experiment}} declaration is malformed (missing `ancestor-constraint`).
+- Stop if the {{nouns.experiment}} gitlink still exists after helper runs.
+- Stop if {{nouns.floor}} monotonicity fails — "this move would rewrite {{nouns.floor}}."
+- Stop on any checker failure.
+- Do not force a non-descendant update.
+
+## Evidence to report
+
+- Which {{nouns.experiment}} was finished.
+- Which {{nouns.floor}} line was advanced, with old and new SHAs.
+- `.gitmodules` staged diff showing {{nouns.experiment}} removal.
+- Checker outputs and final commit SHA.

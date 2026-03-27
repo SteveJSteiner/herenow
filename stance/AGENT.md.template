@@ -1,0 +1,183 @@
+# Agent Constitution — {{project.name}}
+
+This is the language I work in.
+
+## The words
+
+**{{nouns.floor}}** is what may be relied on. It is load-bearing.
+Other work builds on it. Changing it is monotonic — it only moves
+forward.
+
+**{{nouns.claim}}** is what is being shaped right now. It is visible
+but not yet load-bearing. It is where I do my work.
+
+**{{nouns.experiment}}** may test and pressure the work, but does
+not yet support it. Nothing in {{nouns.experiment}} has weight
+until it is explicitly made load-bearing.
+
+**{{nouns.blocked}}** means a boundary would reject the next commit.
+Something must be fixed before work can proceed.
+
+**Never treat {{nouns.experiment}} as {{nouns.floor}}.**
+**Only {{acts.finish}} gives work weight.**
+
+---
+
+## Acts
+
+### {{acts.show}}
+
+What is the current state of the world?
+{{#examples.show_example}}
+_e.g. {{examples.show_example}}_
+{{/examples.show_example}}
+
+Returns four categories:
+
+| Category | Meaning |
+|---|---|
+| **{{nouns.floor}}** | Work others rely on |
+| **{{nouns.claim}}** | What I am currently shaping |
+| **{{nouns.experiment}}** | Active explorations not yet load-bearing |
+| **{{nouns.blocked}}** | Boundaries that would reject a commit |
+
+Run {{acts.show}} before acting. Run it after acting.
+
+### {{acts.explore}}
+
+Open or continue an exploration.
+{{#examples.explore_example}}
+_e.g. {{examples.explore_example}}_
+{{/examples.explore_example}}
+
+Creates or resumes speculative work. An exploration must name the
+{{nouns.floor}} line it belongs to. It lives separately until it
+is ready to be integrated.
+
+### {{acts.integrate}}
+
+Pull nearly-done exploration onto the working surface.
+{{#examples.integrate_example}}
+_e.g. {{examples.integrate_example}}_
+{{/examples.integrate_example}}
+
+This is not {{acts.finish}}. It moves exploratory work into
+{{nouns.claim}} so it can be tested and adjusted. The exploration
+remains open until the work is made load-bearing.
+
+### {{acts.finish}}
+
+Make finished work load-bearing.
+{{#examples.finish_example}}
+_e.g. {{examples.finish_example}}_
+{{/examples.finish_example}}
+
+This is the critical transition. After this, the work is
+{{nouns.floor}} — others may depend on it.
+
+Requires all of the following, atomically:
+1. Advance the {{nouns.floor}} line forward.
+2. Update the reference on the working surface.
+3. Remove the graduated exploration.
+4. Commit.
+
+If any step fails, the whole operation fails.
+
+### {{acts.change_rules}}
+
+Modify the enforcement apparatus itself.
+{{#examples.change_rules_example}}
+_e.g. {{examples.change_rules_example}}_
+{{/examples.change_rules_example}}
+
+Rule changes alter what the system permits. The enforcement source
+and the signed rule set must stay in sync.
+
+### {{acts.save}}
+
+Commit the current {{nouns.claim}} under governance.
+{{#examples.save_example}}
+_e.g. {{examples.save_example}}_
+{{/examples.save_example}}
+
+The enforcement checks run automatically. If any check fails, the
+commit is rejected.
+
+---
+
+## Intent routing
+
+Before acting, classify what I am doing:
+
+| Intent | Act |
+|---|---|
+| I need to see where things stand | {{acts.show}} |
+| I am exploring something new | {{acts.explore}} |
+| I am pulling exploration onto the working surface | {{acts.integrate}} |
+| I am making finished work load-bearing | {{acts.finish}} |
+| I am changing enforcement rules | {{acts.change_rules}} |
+| I am committing current work | {{acts.save}} |
+
+If I cannot classify my intent, the task is underspecified.
+Stop and re-examine.
+
+---
+
+## When something blocks
+
+During normal work I use the acts above. I say {{acts.finish}},
+not the name of a checker script.
+
+When something blocks, the enforcement layer becomes visible.
+The diagnostic names the specific check that failed:
+
+| Failure | What I hear |
+|---|---|
+| Rewriting load-bearing work | "this move would rewrite {{nouns.floor}}" |
+| Exploration lost its tie to {{nouns.floor}} | "this exploration no longer belongs to the {{nouns.floor}} line it claims" |
+| Rules out of sync | "enforcement source does not match the signed rule set" |
+| Malformed declaration | "entry is missing or has wrong keys" |
+
+Read the diagnostic. Fix the specific condition. Retry the act.
+
+Do not invoke enforcement checks by name during normal work.
+They run automatically.
+
+---
+
+## What this file does not cover
+
+- Setup (init.sh, bootstrap.sh — run once).
+- Internal checker structure (read `.now/src/` when a failure
+  needs diagnosis).
+- The hook chain (read `.now/hooks/` if the enforcement sequence
+  itself is in question).
+- Git plumbing (abstracted by the act layer).
+
+If I am reaching for any of the above during normal work, I have
+dropped out of the stance. Return to the acts.
+
+---
+
+## Appendix: substrate mapping
+
+The enforcement substrate uses fixed git conventions. This mapping
+is operational — it explains what the agent sees in git output.
+It is not part of the normal working language.
+
+| This project says | Git shows | Branch prefix |
+|---|---|---|
+| {{nouns.floor}} | submodule gitlinks, pinned commits | `past/` |
+| {{nouns.claim}} | staged and working changes | (the `now` branch itself) |
+| {{nouns.experiment}} | separate branches with declared ties | `future/` |
+| enforcement rules | manifest and hook source | `meta` |
+
+When git output shows `future/parser-spike`, read that as
+"a {{nouns.experiment}} named parser-spike." When it shows
+`past/rca0`, read that as "a {{nouns.floor}} line named rca0."
+
+The `.gitmodules` file declares each entry's role (`role = past`,
+`role = future`) and, for explorations, which {{nouns.floor}} line
+the exploration belongs to (`ancestor-constraint = <name>`). The
+enforcement hooks read these declarations. The agent does not
+edit them directly — the acts handle that.

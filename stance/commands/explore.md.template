@@ -1,0 +1,63 @@
+# `/{{acts.explore}}`
+
+## When this command applies
+
+Use this to open or continue speculative work. An {{nouns.experiment}} must name the {{nouns.floor}} line it belongs to. It lives separately until it is ready to be integrated.
+
+## Truth sources
+
+- Routes to: `substrate/create-future`
+- helper: `.now/src/create-future.sh`
+- checker: `.now/src/validate-gitmodules.sh`
+- checker: `.now/src/check-future-grounding.sh`
+- checker: `.now/src/check-composition.sh`
+
+## Preconditions
+
+- On `now`.
+- Bootstrap complete.
+- Target {{nouns.floor}} line exists (a `past/*` submodule with `role = past`).
+- Name for the {{nouns.experiment}} has no `/` or `.`.
+
+## Steps
+
+1. Identify which {{nouns.floor}} line this {{nouns.experiment}} belongs to:
+   ```sh
+   # List available floor lines
+   git config --file .gitmodules --get-regexp 'submodule\..*\.role' | grep 'past$'
+   ```
+2. Create the {{nouns.experiment}} via the substrate helper:
+   ```sh
+   sh .now/src/create-future.sh <name> <past-submodule> [<start-point>]
+   ```
+3. Review staged declaration:
+   ```sh
+   git diff --cached -- .gitmodules
+   git ls-files --stage -- "future/<name>"
+   ```
+4. Run checks:
+   ```sh
+   sh .now/src/validate-gitmodules.sh .gitmodules
+   sh .now/src/check-future-grounding.sh .gitmodules
+   sh .now/src/check-composition.sh .gitmodules
+   ```
+5. Commit via `/{{acts.save}}` or direct `git commit`.
+
+## Verification
+
+- `.gitmodules` includes `role = future` and `ancestor-constraint = <past-submodule>`.
+- Grounding check confirms non-trivial shared ancestry with the {{nouns.floor}} line.
+- Composition passes.
+
+## Failure protocol
+
+- Stop if the named {{nouns.floor}} line does not exist.
+- Stop if grounding fails — the {{nouns.experiment}} has lost its tie to {{nouns.floor}}.
+- Stop on any checker failure before commit.
+
+## Evidence to report
+
+- Which {{nouns.floor}} line the {{nouns.experiment}} is grounded to.
+- Helper output with branch SHA.
+- `.gitmodules` staged diff.
+- Checker outputs and commit SHA.

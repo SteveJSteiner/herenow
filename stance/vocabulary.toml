@@ -1,0 +1,45 @@
+# Vocabulary Manifest
+#
+# Agent-facing language for this repository.
+# Filled during install-stance. Lives on meta.
+#
+# The enforcement substrate uses fixed branch prefixes
+# (past/, future/, meta). These names sit in front of that
+# substrate — the agent thinks in these words, the hooks
+# think in positions.
+
+[project]
+name = ""
+domain = ""              # one phrase: "game development", "proof engineering", etc.
+
+[acts]
+# What does the agent say when it wants to do these things?
+# Each must be a single word or hyphenated pair.
+# All act names must be distinct from each other and from all noun names.
+# finish and save must not collapse to the same word.
+show = ""                # inspect where things stand
+explore = ""             # open/continue speculative work
+integrate = ""           # pull exploration onto working surface
+finish = ""              # make work load-bearing for others
+change_rules = ""        # modify enforcement apparatus
+save = ""                # governed commit on now
+
+[nouns]
+# What does the agent call the state categories?
+# Each must be a single word.
+# All noun names must be distinct from each other and from all act names.
+floor = ""               # work others may rely on
+claim = ""               # what is currently being shaped
+experiment = ""          # active explorations not yet load-bearing
+blocked = ""             # boundaries that would reject a commit
+
+[examples]
+# Optional one-liners in your domain's language.
+# These appear in the stamped AGENT.md to make acts concrete.
+# Leave blank to omit.
+show_example = ""
+explore_example = ""
+integrate_example = ""
+finish_example = ""
+change_rules_example = ""
+save_example = ""
