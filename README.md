@@ -99,8 +99,9 @@ The first governed commit will succeed: `init.sh` step 6 seeds an
 the box.
 
 At this point the enforcement substrate is fully operational. The stance layer
-is not yet installed — `meta/stance/vocabulary.toml` exists but is empty. To
-install a working vocabulary and act-layer slash commands, see step 4.
+is not yet installed — `meta/stance/vocabulary.toml` exists as an unfilled
+skeleton (keys present with empty values). To install a working vocabulary and
+act-layer slash commands, see step 4.
 
 ### Step 4: Install the stance layer (optional)
 
@@ -132,9 +133,10 @@ If you want each branch checked out simultaneously in its own directory:
 sh .now/src/provision-worktrees.sh
 ```
 
-This creates `wt/<n>/` for each branch declared in `.gitmodules`. It is
-idempotent and optional — enforcement works without worktrees. See
-[Worktree provisioning](#worktree-provisioning) for details.
+This creates `wt/<branch>/` for each branch declared in `.gitmodules` (using
+the submodule/branch name). It is idempotent and optional — enforcement works
+without worktrees. See [Worktree provisioning](#worktree-provisioning) for
+details.
 
 ---
 
@@ -168,18 +170,21 @@ just index entries pointing at the existing objects. Both the hooks in
 `.now/hooks/` and the evaluators in `.now/src/` are committed onto the `now`
 branch with their original modes and content.
 
-Step 5 also seeds these additional artifacts from the scaffold's HEAD tree:
+Step 5 also seeds these additional artifacts:
 
-- `.now/docs/` — nine operator procedure docs (see [Operator documentation](#operator-documentation))
-- `.claude/commands/install-stance.md` — the fixed slash command for stance installation
-- `CLAUDE.md` — agent runtime contract (see [Agent runtime contract](#agent-runtime-contract))
-- `INSTALL-STANCE.md` — stance install reference for humans
-- `bootstrap.sh` — governance activator (embedded in `init.sh` as a heredoc)
-- `.gitmodules` — declares only the `meta` submodule at init time
-- `.gitignore`
+- From the scaffold's HEAD tree (with inline fallbacks):
+  - `.now/docs/` — nine operator procedure docs (see [Operator documentation](#operator-documentation))
+  - `.claude/commands/install-stance.md` — the fixed slash command for stance installation
+  - `CLAUDE.md` — agent runtime contract (see [Agent runtime contract](#agent-runtime-contract))
+  - `INSTALL-STANCE.md` — stance install reference for humans
+- Generated from embedded templates in `init.sh` (not read from HEAD):
+  - `bootstrap.sh` — governance activator (embedded in `init.sh` as a heredoc)
+  - `.gitmodules` — declares only the `meta` submodule at init time
+  - `.gitignore`
 
-Each artifact is read from the scaffold's HEAD tree if present, with an inline
-fallback if the scaffold lacks it.
+Each HEAD-sourced artifact is read from the scaffold's HEAD tree if present,
+with an inline fallback if the scaffold lacks it. The generated artifacts are
+always written from embedded templates in `init.sh`.
 
 ### What step 6 seeds onto `meta`
 
@@ -190,7 +195,8 @@ Step 6 creates the meta branch's initial content:
   step 5, listing `<blob-hash> <file-path>` for every file in `.now/hooks/`
   and `.now/src/`. `check-meta-consistency.sh` reads this manifest on every
   governed commit and compares each listed file against the working tree.
-- `stance/vocabulary.toml` — empty vocabulary skeleton for the stance layer.
+- `stance/vocabulary.toml` — unfilled vocabulary skeleton for the stance layer
+  (keys present with empty values).
   The operator fills this after bootstrap and before running `install-stance.sh`.
 - `stance/STANCE.md.template` — template for the generated `STANCE.md` file.
 - `stance/commands/*.md.template` — six templates for the act-layer slash
@@ -341,9 +347,9 @@ generated tier.
 appear in `.claude/commands/`, named according to `meta/stance/vocabulary.toml`.
 These are rendered from templates on meta (`stance/commands/*.md.template`) and
 tracked by `.claude/commands/.stance-generated`, which lists the generated file
-paths. The installer verifies that no unexpected markdown files exist in
-`.claude/commands/` — only `install-stance.md`, `.stance-generated`, and the
-six generated commands are permitted.
+paths. The installer enforces that the only markdown command files in
+`.claude/commands/` are `install-stance.md` and the generated commands recorded
+in `.stance-generated`; other unexpected files are warned about.
 
 The generated commands follow the same structural skeleton as the operator docs
 (when to apply, truth sources, preconditions, steps, verification, failure
@@ -431,8 +437,8 @@ Parses `.gitmodules` and enforces six static rules on every submodule entry:
 - **Rule 6**: No two submodules may share the same `path`.
 
 The canonical key names are `role` and `ancestor-constraint`. No other names
-work. `validate-gitmodules.sh` reads `submodule.<n>.role` and
-`submodule.<n>.ancestor-constraint` literally. If you write `membrane-role`
+work. `validate-gitmodules.sh` reads `submodule.<name>.role` and
+`submodule.<name>.ancestor-constraint` literally. If you write `membrane-role`
 or any other name, the validator will report a missing `role` key and reject
 the entry.
 
