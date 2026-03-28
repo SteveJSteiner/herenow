@@ -88,7 +88,36 @@ get_value() {
 parse_toml() {
     section=""
     while IFS= read -r raw_line || [ -n "$raw_line" ]; do
-        line=$(printf '%s' "$raw_line" | sed 's/[[:space:]]*#.*$//')
+        line=$(printf '%s\n' "$raw_line" | awk '
+            BEGIN { in_string=0; escape=0; out="" }
+            {
+                for (i = 1; i <= length($0); i++) {
+                    c = substr($0, i, 1)
+                    if (escape) {
+                        out = out c
+                        escape = 0
+                        continue
+                    }
+                    if (c == "\\") {
+                        out = out c
+                        if (in_string) {
+                            escape = 1
+                        }
+                        continue
+                    }
+                    if (c == "\"") {
+                        in_string = !in_string
+                        out = out c
+                        continue
+                    }
+                    if (c == "#" && !in_string) {
+                        break
+                    }
+                    out = out c
+                }
+                gsub(/[[:space:]]+$/, "", out)
+                print out
+            }')
         line=$(trim "$line")
         [ -z "$line" ] && continue
         case "$line" in
@@ -267,6 +296,7 @@ if [ -f "$GENERATED_INDEX" ]; then
         [ -z "$old_path" ] && continue
         rm -f "$REPO_ROOT/$old_path"
     done < "$GENERATED_INDEX"
+    git add -u -- "$COMMAND_DIR"
 fi
 
 render_template "$COMMAND_TEMPLATES_DIR/show.md.template" "$COMMAND_DIR/$commands_show.md"

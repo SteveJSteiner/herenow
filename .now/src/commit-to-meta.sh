@@ -68,6 +68,20 @@ if [ ! -d "$meta_worktree" ]; then
     exit 1
 fi
 
+sync_meta_worktree() {
+    target_sha=$1
+    if ! git -C "$meta_worktree" rev-parse --git-dir >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! git -C "$meta_worktree" fetch --quiet "$repo_root" refs/heads/meta >/dev/null 2>&1; then
+        echo "Warning: failed to fetch updated refs/heads/meta into meta worktree." >&2
+        return 0
+    fi
+    if ! git -C "$meta_worktree" reset --hard "$target_sha" >/dev/null 2>&1; then
+        echo "Warning: failed to reset meta worktree to $target_sha; meta worktree may remain dirty." >&2
+    fi
+}
+
 # Guard: only declared paths may be dirty in meta worktree.
 unexpected_dirty=""
 while IFS= read -r dirty_path; do
@@ -128,6 +142,7 @@ new_tree=$(GIT_INDEX_FILE="$temp_index" git write-tree)
 if [ "$old_tree" = "$new_tree" ]; then
     echo "No changes detected for declared meta paths; skipping meta commit." >&2
     git update-index --add --cacheinfo "160000,$meta_tip,$meta_path"
+    sync_meta_worktree "$meta_tip"
     printf '%s\n' "$meta_tip"
     exit 0
 fi
@@ -137,6 +152,7 @@ git update-ref refs/heads/meta "$meta_sha"
 
 # Stage gitlink update on now.
 git update-index --add --cacheinfo "160000,$meta_sha,$meta_path"
+sync_meta_worktree "$meta_sha"
 echo "Committed declared meta paths and staged gitlink update." >&2
 
 printf '%s\n' "$meta_sha"

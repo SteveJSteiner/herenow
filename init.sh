@@ -80,6 +80,7 @@ step5_done() {
 }
 
 step6_done() {
+    git rev-parse --verify "refs/heads/meta:enforcement-manifest" >/dev/null 2>&1 || return 1
     git rev-parse --verify "refs/heads/meta:stance/vocabulary.toml" >/dev/null 2>&1 || return 1
     git rev-parse --verify "refs/heads/meta:stance/STANCE.md.template" >/dev/null 2>&1 || return 1
     git rev-parse --verify "refs/heads/meta:stance/commands/show.md.template" >/dev/null 2>&1 || return 1
@@ -180,34 +181,93 @@ if ! step5_done; then
     rm -f "$TEMP_ENTRIES"
 
     # Fixed /install-stance command doc (seeded from scaffold HEAD; single source of truth).
-    _blob=$(git show HEAD:.claude/commands/install-stance.md | blob)
+    if git cat-file -e "HEAD:.claude/commands/install-stance.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.claude/commands/install-stance.md | blob)
+    else
+        _blob=$(blob <<'INSTALL_STANCE_CMD_FALLBACK'
+---
+description: "Install or restamp governed stance vocabulary and act-layer commands"
+---
+
+Run:
+
+```sh
+sh .now/src/install-stance.sh
+```
+INSTALL_STANCE_CMD_FALLBACK
+)
+    fi
     add_entry 100644 "$_blob" ".claude/commands/install-stance.md"
 
     # Root memory/runtime docs used by stance install.
-    _blob=$(git show HEAD:CLAUDE.md | blob)
+    if git cat-file -e "HEAD:CLAUDE.md" 2>/dev/null; then
+        _blob=$(git show HEAD:CLAUDE.md | blob)
+    else
+        _blob=$(blob '# Claude runtime contract.')
+    fi
     add_entry 100644 "$_blob" "CLAUDE.md"
 
-    _blob=$(git show HEAD:INSTALL-STANCE.md | blob)
+    if git cat-file -e "HEAD:INSTALL-STANCE.md" 2>/dev/null; then
+        _blob=$(git show HEAD:INSTALL-STANCE.md | blob)
+    else
+        _blob=$(blob '# Install stance with `sh .now/src/install-stance.sh`.')
+    fi
     add_entry 100644 "$_blob" "INSTALL-STANCE.md"
 
     # Non-command substrate/operator reference docs.
-    _blob=$(git show HEAD:.now/docs/membrane-status.md | blob)
+    if git cat-file -e "HEAD:.now/docs/membrane-status.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/membrane-status.md | blob)
+    else
+        _blob=$(blob '# membrane-status reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/membrane-status.md"
-    _blob=$(git show HEAD:.now/docs/init-bootstrap-first-commit.md | blob)
+    if git cat-file -e "HEAD:.now/docs/init-bootstrap-first-commit.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/init-bootstrap-first-commit.md | blob)
+    else
+        _blob=$(blob '# init-bootstrap-first-commit reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/init-bootstrap-first-commit.md"
-    _blob=$(git show HEAD:.now/docs/now-commit.md | blob)
+    if git cat-file -e "HEAD:.now/docs/now-commit.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/now-commit.md | blob)
+    else
+        _blob=$(blob '# now-commit reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/now-commit.md"
-    _blob=$(git show HEAD:.now/docs/modify-enforcement-source.md | blob)
+    if git cat-file -e "HEAD:.now/docs/modify-enforcement-source.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/modify-enforcement-source.md | blob)
+    else
+        _blob=$(blob '# modify-enforcement-source reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/modify-enforcement-source.md"
-    _blob=$(git show HEAD:.now/docs/create-past.md | blob)
+    if git cat-file -e "HEAD:.now/docs/create-past.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/create-past.md | blob)
+    else
+        _blob=$(blob '# create-past reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/create-past.md"
-    _blob=$(git show HEAD:.now/docs/create-future.md | blob)
+    if git cat-file -e "HEAD:.now/docs/create-future.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/create-future.md | blob)
+    else
+        _blob=$(blob '# create-future reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/create-future.md"
-    _blob=$(git show HEAD:.now/docs/advance-past.md | blob)
+    if git cat-file -e "HEAD:.now/docs/advance-past.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/advance-past.md | blob)
+    else
+        _blob=$(blob '# advance-past reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/advance-past.md"
-    _blob=$(git show HEAD:.now/docs/graduate-future.md | blob)
+    if git cat-file -e "HEAD:.now/docs/graduate-future.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/graduate-future.md | blob)
+    else
+        _blob=$(blob '# graduate-future reference')
+    fi
     add_entry 100644 "$_blob" ".now/docs/graduate-future.md"
-    _blob=$(git show HEAD:.now/docs/commands-register.md | blob)
+    if git cat-file -e "HEAD:.now/docs/commands-register.md" 2>/dev/null; then
+        _blob=$(git show HEAD:.now/docs/commands-register.md | blob)
+    else
+        _blob=$(blob '# commands register guidance')
+    fi
     add_entry 100644 "$_blob" ".now/docs/commands-register.md"
 
     # bootstrap.sh
