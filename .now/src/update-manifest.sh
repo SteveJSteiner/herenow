@@ -75,9 +75,16 @@ if [ ! -d "$meta_worktree" ]; then
     exit 1
 fi
 
+meta_tip=$(git rev-parse --verify refs/heads/meta 2>/dev/null || true)
+if [ -z "$meta_tip" ]; then
+    echo "Error: could not resolve refs/heads/meta." >&2
+    exit 1
+fi
+
 # --- Generate new manifest from working-tree enforcement files ---
 
 manifest_body=""
+extra_paths=""
 for dir in ".now/hooks" ".now/src"; do
     full="$repo_root/$dir"
     [ -d "$full" ] || continue
@@ -89,6 +96,42 @@ for dir in ".now/hooks" ".now/src"; do
 "
     done
 done
+
+extra_list_tmp=$(mktemp "${TMPDIR:-/tmp}/extra-manifested-files.XXXXXX")
+trap 'rm -f "$extra_list_tmp"' EXIT INT HUP TERM
+
+if git show "$meta_tip:extra-manifested-files" > "$extra_list_tmp" 2>/dev/null; then
+    while IFS= read -r raw_line || [ -n "$raw_line" ]; do
+        line=$(printf '%s' "$raw_line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        case "$line" in
+            ''|'#'*) continue ;;
+        esac
+        case "$line" in
+            /*)
+                echo "Error: unsafe extra manifested path (must be repo-relative): $line" >&2
+                exit 1
+                ;;
+        esac
+        case "/$line/" in
+            */../*)
+                echo "Error: unsafe extra manifested path (must not contain '..'): $line" >&2
+                exit 1
+                ;;
+        esac
+
+        full="$repo_root/$line"
+        if [ ! -f "$full" ]; then
+            echo "Error: declared extra manifested file missing: $line" >&2
+            exit 1
+        fi
+
+        hash=$(git hash-object "$full")
+        manifest_body="${manifest_body}${hash} ${line}
+"
+        extra_paths="${extra_paths}${line}
+"
+    done < "$extra_list_tmp"
+fi
 
 if [ -z "$manifest_body" ]; then
     echo "Error: no enforcement files found in .now/hooks/ or .now/src/." >&2
@@ -113,6 +156,14 @@ for dir in ".now/hooks" ".now/src"; do
     git -C "$repo_root" add -- "$dir"
     echo "  Staged $dir"
 done
+
+if [ -n "$extra_paths" ]; then
+    printf '%s' "$extra_paths" | sort -u | while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        git -C "$repo_root" add -- "$path"
+        echo "  Staged $path"
+    done
+fi
 
 echo ""
 echo "Staged. Commit to record the update:"
