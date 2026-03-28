@@ -53,6 +53,10 @@ init_log="$FIXTURE/init.log"
 sh ./init.sh >"$init_log" 2>&1 || { fail "init.sh failed"; cat "$init_log"; exit 1; }
 bootstrap_log="$FIXTURE/bootstrap.log"
 sh ./bootstrap.sh >"$bootstrap_log" 2>&1 || { fail "bootstrap.sh failed"; cat "$bootstrap_log"; exit 1; }
+update1_log="$FIXTURE/gt-extra.update1.log"
+update2_log="$FIXTURE/gt-extra.update2.log"
+update4_log="$FIXTURE/gt-extra.update4.log"
+update6_log="$FIXTURE/gt-extra.update6.log"
 
 manifest_on_meta() {
     meta_tip=$(git rev-parse refs/heads/meta)
@@ -75,10 +79,10 @@ write_extra_manifest_file() {
 # ---------------------------------------------------------------------------
 echo "--- Test 1: Backward compatibility"
 printf 'canary-content\n' > canary.txt
-sh .now/src/update-manifest.sh >/tmp/gt-extra.update1.log 2>&1 || {
+sh .now/src/update-manifest.sh >"$update1_log" 2>&1 || {
     fail "update-manifest succeeds without extra-manifested-files"
     echo "--- output ---"
-    cat /tmp/gt-extra.update1.log
+    cat "$update1_log"
     echo "-------------"
     exit 1
 }
@@ -94,9 +98,9 @@ echo "--- Test 2: Seal an extra file"
 write_extra_manifest_file "CLAUDE.md"
 
 printf 'sealed content\n' > CLAUDE.md
-sh .now/src/update-manifest.sh >/tmp/gt-extra.update2.log 2>&1 || {
+sh .now/src/update-manifest.sh >"$update2_log" 2>&1 || {
     fail "update-manifest succeeds with declared extra file"
-    cat /tmp/gt-extra.update2.log
+    cat "$update2_log"
     exit 1
 }
 manifest="$(manifest_on_meta)"
@@ -145,9 +149,9 @@ git checkout -q -- CLAUDE.md
 echo "--- Test 4: Regeneration preserves seal"
 pre_hash=$(printf '%s\n' "$(manifest_on_meta)" | awk '$2=="CLAUDE.md"{print $1}')
 printf '\n# GT extra test marker\n' >> .now/src/update-manifest.sh
-sh .now/src/update-manifest.sh >/tmp/gt-extra.update4.log 2>&1 || {
+sh .now/src/update-manifest.sh >"$update4_log" 2>&1 || {
     fail "update-manifest succeeds after enforcement source change"
-    cat /tmp/gt-extra.update4.log
+    cat "$update4_log"
     exit 1
 }
 manifest="$(manifest_on_meta)"
@@ -188,9 +192,9 @@ CLAUDE.md
 
 # Another comment"
 
-sh .now/src/update-manifest.sh >/tmp/gt-extra.update6.log 2>&1 || {
+sh .now/src/update-manifest.sh >"$update6_log" 2>&1 || {
     fail "update-manifest succeeds with comments/blanks in extra-manifested-files"
-    cat /tmp/gt-extra.update6.log
+    cat "$update6_log"
     exit 1
 }
 manifest="$(manifest_on_meta)"
@@ -261,6 +265,21 @@ else
     fail "update-manifest rejects symlink entries"
 fi
 assert_contains "unsafe symlink error mentions rejected path" "$unsafe_link_output" "linked-file"
+
+mkdir -p realdir
+printf 'parent symlink target\n' > realdir/inner.txt
+ln -sfn realdir linked-dir
+write_extra_manifest_file "linked-dir/inner.txt"
+set +e
+unsafe_parent_link_output=$(sh .now/src/update-manifest.sh 2>&1)
+unsafe_parent_link_rc=$?
+set -e
+if [ "$unsafe_parent_link_rc" -ne 0 ]; then
+    pass "update-manifest rejects paths containing parent symlink components"
+else
+    fail "update-manifest rejects paths containing parent symlink components"
+fi
+assert_contains "unsafe parent symlink error mentions rejected path" "$unsafe_parent_link_output" "linked-dir/inner.txt"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
