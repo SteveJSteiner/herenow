@@ -12,6 +12,14 @@ anyway (`--no-verify`), it will be automatically reverted on the next governed
 operation (`post-commit`). The constraint logic lives in `.now/src/` — plain
 POSIX shell, no external dependencies, readable in one sitting.
 
+The repository has three layers. The enforcement substrate (hooks, checkers,
+immune response) is the bottom layer and the subject of most of this document.
+Above it, operator documentation in `.now/docs/` provides reference-grade
+procedure guides for governed operations. On top, the stance layer installs
+a working vocabulary and act-layer commands for use with a coding agent. Each
+layer is optional upward: the enforcement substrate works without the stance
+layer, and the operator docs are useful without installing any vocabulary.
+
 ---
 
 ## Contents
@@ -20,14 +28,17 @@ POSIX shell, no external dependencies, readable in one sitting.
 2. [What init.sh creates](#what-initsh-creates)
 3. [What bootstrap.sh does](#what-bootstrapsh-does)
 4. [Where the enforcement source lives](#where-the-enforcement-source-lives)
-5. [Branch roles](#branch-roles)
-6. [The enforcement chain](#the-enforcement-chain)
-7. [What each check verifies](#what-each-check-verifies)
-8. [Violation responses](#violation-responses)
-9. [Bypass detection](#bypass-detection)
-10. [Adding past and future branches](#adding-past-and-future-branches)
-11. [Worktree provisioning](#worktree-provisioning)
-12. [Known limitations and discrepancies](#known-limitations-and-discrepancies)
+5. [Operator documentation](#operator-documentation)
+6. [Command surface](#command-surface)
+7. [Agent runtime contract](#agent-runtime-contract)
+8. [Branch roles](#branch-roles)
+9. [The enforcement chain](#the-enforcement-chain)
+10. [What each check verifies](#what-each-check-verifies)
+11. [Violation responses](#violation-responses)
+12. [Bypass detection](#bypass-detection)
+13. [Adding past and future branches](#adding-past-and-future-branches)
+14. [Worktree provisioning](#worktree-provisioning)
+15. [Known limitations and discrepancies](#known-limitations-and-discrepancies)
 
 ---
 
@@ -48,10 +59,9 @@ cd my-repo
 ```
 
 At this point you have the scaffold. The branch `main` (or whichever branch
-HEAD is on) contains `init.sh`, `bootstrap.sh` (embedded inside `init.sh`),
-the full enforcement source in `.now/src/`, real enforcement hooks in
-`.now/hooks/`, and test suites in `.now/tests/` and `test/`. No membrane
-topology exists yet.
+HEAD is on) contains `init.sh`, the full enforcement source in `.now/src/`,
+real enforcement hooks in `.now/hooks/`, operator docs in `.now/docs/`, and
+test suites in `.now/tests/` and `test/`. No membrane topology exists yet.
 
 ### Step 2: Initialize the membrane
 
@@ -61,8 +71,9 @@ topology exists yet.
 
 `init.sh` is idempotent and non-interactive. It creates the membrane topology
 using git plumbing commands (no working-tree writes) and ends by checking out
-the `now` branch. Step 5 of init reads the enforcement source directly from the
-scaffold's HEAD tree and commits it onto `now` — no manual copy step required.
+the `now` branch. Step 5 of init reads the enforcement source, operator docs,
+agent contract, and the fixed `/install-stance` command directly from the
+scaffold's HEAD tree and commits them onto `now` — no manual copy step required.
 See [What init.sh creates](#what-initsh-creates) for the full list of refs and
 commits it produces.
 
@@ -80,10 +91,38 @@ both. See [What bootstrap.sh does](#what-bootstrapsh-does) for details.
 
 You are on the `now` branch. `core.hooksPath` points to `.now/hooks/`. The
 hooks in `.now/hooks/` are the real enforcement hooks sourced from the scaffold.
-`.now/src/` contains the constraint evaluators and operator helpers. The `meta/`
-submodule is initialized. The first governed commit will succeed: `init.sh`
-step 6 seeds an `enforcement-manifest` on `meta` so the meta-consistency check
-passes out of the box.
+`.now/src/` contains the constraint evaluators, operator helpers, and install
+machinery. `.now/docs/` contains reference-grade operator procedure docs. The
+`meta/` submodule is initialized. `CLAUDE.md` is the agent runtime contract.
+The first governed commit will succeed: `init.sh` step 6 seeds an
+`enforcement-manifest` on `meta` so the meta-consistency check passes out of
+the box.
+
+At this point the enforcement substrate is fully operational. The stance layer
+is not yet installed — `meta/stance/vocabulary.toml` exists but is empty. To
+install a working vocabulary and act-layer slash commands, see step 4.
+
+### Step 4: Install the stance layer (optional)
+
+Edit the vocabulary manifest on meta:
+
+```sh
+$EDITOR meta/stance/vocabulary.toml
+```
+
+Fill in the `[stance]` section (title, description, and four noun names) and
+the `[commands]` section (six verb names for the act-layer commands). Then run
+the installer:
+
+```sh
+sh .now/src/install-stance.sh
+```
+
+The installer validates the vocabulary, commits it on `meta` via
+`commit-to-meta.sh`, renders `STANCE.md` and six act-layer slash commands from
+governed templates, stamps a managed import block into `CLAUDE.md`, verifies
+command-surface minimality, and commits now-side artifacts. See
+`INSTALL-STANCE.md` for the full flow and recovery instructions.
 
 ### Optional: provision worktrees
 
@@ -93,7 +132,7 @@ If you want each branch checked out simultaneously in its own directory:
 sh .now/src/provision-worktrees.sh
 ```
 
-This creates `wt/<name>/` for each branch declared in `.gitmodules`. It is
+This creates `wt/<n>/` for each branch declared in `.gitmodules`. It is
 idempotent and optional — enforcement works without worktrees. See
 [Worktree provisioning](#worktree-provisioning) for details.
 
@@ -109,8 +148,8 @@ idempotent and optional — enforcement works without worktrees. See
 | 2 | Snapshot of the pre-init state | `refs/heads/provenance/scaffold` |
 | 3 | The `now` branch, pointing at the root | `refs/heads/now` |
 | 4 | The `meta` branch, pointing at the root | `refs/heads/meta` |
-| 5 | Enforcement hooks (`.now/hooks/`), enforcement source (`.now/src/`), `bootstrap.sh`, `.gitmodules`, `.gitignore` onto `now` | commit on `refs/heads/now` |
-| 6 | A README onto `meta` | commit on `refs/heads/meta` |
+| 5 | Enforcement hooks (`.now/hooks/`), enforcement source (`.now/src/`), operator docs (`.now/docs/`), `CLAUDE.md`, `INSTALL-STANCE.md`, `.claude/commands/install-stance.md`, `bootstrap.sh`, `.gitmodules`, `.gitignore` onto `now` | commit on `refs/heads/now` |
+| 6 | README, `enforcement-manifest`, and stance templates (`stance/vocabulary.toml`, `stance/STANCE.md.template`, `stance/commands/*.md.template`) onto `meta` | commit on `refs/heads/meta` |
 | 7 | Planning files and the meta gitlink onto `now` | commit on `refs/heads/now` |
 | 8 | Checkout of `now` | working tree |
 
@@ -128,6 +167,38 @@ git's object store from the scaffold commit, so no file copies are needed —
 just index entries pointing at the existing objects. Both the hooks in
 `.now/hooks/` and the evaluators in `.now/src/` are committed onto the `now`
 branch with their original modes and content.
+
+Step 5 also seeds these additional artifacts from the scaffold's HEAD tree:
+
+- `.now/docs/` — nine operator procedure docs (see [Operator documentation](#operator-documentation))
+- `.claude/commands/install-stance.md` — the fixed slash command for stance installation
+- `CLAUDE.md` — agent runtime contract (see [Agent runtime contract](#agent-runtime-contract))
+- `INSTALL-STANCE.md` — stance install reference for humans
+- `bootstrap.sh` — governance activator (embedded in `init.sh` as a heredoc)
+- `.gitmodules` — declares only the `meta` submodule at init time
+- `.gitignore`
+
+Each artifact is read from the scaffold's HEAD tree if present, with an inline
+fallback if the scaffold lacks it.
+
+### What step 6 seeds onto `meta`
+
+Step 6 creates the meta branch's initial content:
+
+- `README.md` — meta branch description
+- `enforcement-manifest` — auto-generated from the files seeded onto `now` in
+  step 5, listing `<blob-hash> <file-path>` for every file in `.now/hooks/`
+  and `.now/src/`. `check-meta-consistency.sh` reads this manifest on every
+  governed commit and compares each listed file against the working tree.
+- `stance/vocabulary.toml` — empty vocabulary skeleton for the stance layer.
+  The operator fills this after bootstrap and before running `install-stance.sh`.
+- `stance/STANCE.md.template` — template for the generated `STANCE.md` file.
+- `stance/commands/*.md.template` — six templates for the act-layer slash
+  commands (`show`, `explore`, `integrate`, `finish`, `change-rules`, `save`).
+
+Because the enforcement manifest is generated from the files that step 5 just
+committed, the meta-consistency check passes on the first governed commit
+without any manual setup.
 
 ### The `.gitmodules` seeded onto `now`
 
@@ -189,9 +260,11 @@ The enforcement source on `provenance/scaffold` contains:
 - `.now/src/check-past-monotonicity.sh` — past pin ancestry check
 - `.now/src/check-future-grounding.sh` — future pin ancestry check
 - `.now/src/check-meta-consistency.sh` — enforcement manifest verification
+- `.now/src/update-manifest.sh` — regenerates the enforcement-manifest on meta after enforcement source changes
+- `.now/src/commit-to-meta.sh` — canonical helper for meta commits with gitlink staging on `now`
+- `.now/src/install-stance.sh` — stance layer installer (TOML parse, template render, command-surface verification)
 - `.now/src/provision-worktrees.sh` — optional worktree provisioner
 - `.now/src/create-past.sh`, `create-future.sh`, `advance-past.sh`, `graduate-future.sh` — operator helpers for branch and pin management
-- `.now/src/update-manifest.sh` — regenerates the enforcement-manifest on meta after enforcement source changes
 - `.now/hooks/pre-commit`, `pre-merge-commit` — the pre-hooks
 - `.now/hooks/post-commit`, `post-merge`, `post-rewrite` — the post-hooks
 
@@ -227,14 +300,88 @@ plumbing.
 
 ---
 
+## Operator documentation
+
+`.now/docs/` contains reference-grade procedure docs for governed operations.
+These are seeded onto `now` by `init.sh` step 5 and describe the mechanism of
+each operation in enough detail for a new operator or coding agent to execute
+it without guessing.
+
+| Document | What it covers |
+|----------|---------------|
+| `init-bootstrap-first-commit.md` | Full path from scaffold to first governed commit |
+| `now-commit.md` | Generic governed commit flow on `now` |
+| `modify-enforcement-source.md` | Editing `.now/hooks/` or `.now/src/` with manifest alignment |
+| `membrane-status.md` | Read-only state classification and governance health |
+| `create-past.md` | Creating a new `past/*` branch and pinning it |
+| `create-future.md` | Creating a new `future/*` branch with ancestor constraint |
+| `advance-past.md` | Advancing an existing past pin |
+| `graduate-future.md` | Graduating a future into its declared past |
+| `commands-register.md` | Prose quality and structural skeleton for command docs |
+
+Every procedure doc follows the skeleton defined in `commands-register.md`:
+when the command applies, truth sources, preconditions, steps, verification,
+failure protocol, and evidence to report.
+
+These docs live in `.now/docs/` (not in `.claude/commands/`) because they are
+reference material, not slash commands. They ship with the enforcement source
+and are always available regardless of whether the stance layer is installed.
+
+---
+
+## Command surface
+
+The slash command surface in `.claude/commands/` has two tiers.
+
+**Fixed tier:** `install-stance.md` is seeded by `init.sh` step 5 and is always
+present. It drives `install-stance.sh` — the only mechanism for populating the
+generated tier.
+
+**Generated tier:** After running `install-stance.sh`, six act-layer commands
+appear in `.claude/commands/`, named according to `meta/stance/vocabulary.toml`.
+These are rendered from templates on meta (`stance/commands/*.md.template`) and
+tracked by `.claude/commands/.stance-generated`, which lists the generated file
+paths. The installer verifies that no unexpected markdown files exist in
+`.claude/commands/` — only `install-stance.md`, `.stance-generated`, and the
+six generated commands are permitted.
+
+The generated commands follow the same structural skeleton as the operator docs
+(when to apply, truth sources, preconditions, steps, verification, failure
+protocol, evidence to report), but their vocabulary is domain-specific: the four
+stance nouns and six act verbs come from the vocabulary manifest, not from the
+enforcement substrate.
+
+To reinstall or update the stance vocabulary, edit
+`meta/stance/vocabulary.toml` and rerun `sh .now/src/install-stance.sh`. The
+installer cleans the previous generated commands, renders new ones from current
+templates, and reverifies the command surface before committing.
+
+---
+
+## Agent runtime contract
+
+`CLAUDE.md` is the durable runtime layer for Claude Code in this repository. It
+establishes truth precedence (source > tests > docs > planning > agent prose),
+an operating rule for write operations, and a grounded vocabulary table binding
+membrane terms to specific files, scripts, and checkers.
+
+When the stance layer is installed, `install-stance.sh` stamps a managed import
+block into `CLAUDE.md` that references `@STANCE.md`. This makes the working
+vocabulary available to the agent at runtime without duplicating it.
+`CLAUDE.md` describes the enforcement substrate and truth precedence;
+`STANCE.md` defines the working vocabulary and act-layer interpretation. The two
+files are complementary, not overlapping.
+
+---
+
 ## Branch roles
 
 After init, these branches exist:
 
 | Branch | Role | What it contains |
 |--------|------|-----------------|
-| `now` | Present composition | Gitlink pins, enforcement hooks (`.now/hooks/`), enforcement source (`.now/src/`), `bootstrap.sh`, planning stubs, meta submodule |
-| `meta` | Self-governance | A README and an `enforcement-manifest` listing the blob hashes of every enforcement file |
+| `now` | Present composition | Gitlink pins, enforcement hooks (`.now/hooks/`), enforcement source (`.now/src/`), operator docs (`.now/docs/`), `CLAUDE.md`, `INSTALL-STANCE.md`, `.claude/commands/install-stance.md`, `bootstrap.sh`, planning stubs, meta submodule |
+| `meta` | Self-governance | A README, an `enforcement-manifest`, and stance templates (`stance/vocabulary.toml`, `stance/STANCE.md.template`, `stance/commands/*.md.template`) |
 | `provenance/scaffold` | Provenance | Snapshot of the template state before init — contains the full enforcement source |
 | `refs/membrane/root` | Shared origin | An empty commit; the common ancestor of all branches |
 
@@ -284,8 +431,8 @@ Parses `.gitmodules` and enforces six static rules on every submodule entry:
 - **Rule 6**: No two submodules may share the same `path`.
 
 The canonical key names are `role` and `ancestor-constraint`. No other names
-work. `validate-gitmodules.sh` reads `submodule.<name>.role` and
-`submodule.<name>.ancestor-constraint` literally. If you write `membrane-role`
+work. `validate-gitmodules.sh` reads `submodule.<n>.role` and
+`submodule.<n>.ancestor-constraint` literally. If you write `membrane-role`
 or any other name, the validator will report a missing `role` key and reject
 the entry.
 
@@ -505,7 +652,7 @@ sh .now/src/provision-worktrees.sh
 
 It reads `.gitmodules` to discover branches, skips the currently checked-out
 branch (since the root already serves as its worktree), and calls `git worktree
-add wt/<name> <branch>` for each one. Missing branches are skipped with a
+add wt/<n> <branch>` for each one. Missing branches are skipped with a
 notice.
 
 ---
@@ -552,6 +699,19 @@ All composition changes go through `now`. There is no mechanism for concurrent
 operators other than standard git merge mechanics, which the constraint-checking
 hooks may reject even for individually valid changes.
 
+### Stance TOML parser is minimal
+
+`install-stance.sh` parses `vocabulary.toml` with POSIX shell and awk. It
+handles quoted string values, inline comments, and section headers, but does
+not support multi-line strings, arrays, inline tables, or the full TOML spec.
+Vocabulary values must be double-quoted strings on single lines.
+
+### Single vocabulary per repository
+
+The stance layer supports one vocabulary manifest (`stance/vocabulary.toml`) and
+one set of act-layer commands. There is no mechanism for multiple concurrent
+vocabularies or per-branch stance configurations.
+
 ---
 
 ## Test coverage
@@ -567,8 +727,9 @@ The repository includes test suites in `test/` and `.now/tests/`:
 | GT12 | `test/gt12/` | `provision-worktrees.sh` — worktree creation, idempotence, edge cases |
 | GT13 | `test/gt13/` | End-to-end smoke test: init → enforcement → bootstrap → compositions → update-manifest |
 | GT15 | `test/gt15/` | Fresh-repo acceptance: template generation to governed membrane |
+| GT16 | `test/gt16/` | Stance install: happy path, duplicate managed-block collapse, unexpected-file rejection, invalid index path rejection |
 | — | `.now/tests/test-immune-response.sh` | All immune-response hook paths (revert, amend, merge, rebase) |
 | — | `.now/tests/test-meta-consistency.sh` | Meta self-consistency check |
 
-194 assertions across these suites. Tests do not cover multi-remote scenarios,
-non-POSIX platforms, git below 2.38, or concurrent operator workflows.
+Tests do not cover multi-remote scenarios, non-POSIX platforms, git below 2.38,
+or concurrent operator workflows.
