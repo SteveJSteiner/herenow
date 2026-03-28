@@ -292,10 +292,26 @@ render_template "$STANCE_TEMPLATE" "$REPO_ROOT/STANCE.md"
 
 mkdir -p "$COMMAND_DIR"
 if [ -f "$GENERATED_INDEX" ]; then
+    invalid_generated_paths=""
     while IFS= read -r old_path; do
         [ -z "$old_path" ] && continue
+        case "$old_path" in
+            .claude/commands/*.md) ;;
+            *) invalid_generated_paths="${invalid_generated_paths}${old_path}\n" ; continue ;;
+        esac
+        case "$old_path" in
+            /*|*'..'*)
+                invalid_generated_paths="${invalid_generated_paths}${old_path}\n"
+                continue
+                ;;
+        esac
         rm -f "$REPO_ROOT/$old_path"
     done < "$GENERATED_INDEX"
+    if [ -n "$invalid_generated_paths" ]; then
+        echo "Error: .claude/commands/.stance-generated contains invalid path entries:" >&2
+        printf '%b' "$invalid_generated_paths" >&2
+        exit 1
+    fi
     git add -u -- "$COMMAND_DIR"
 fi
 
@@ -316,7 +332,6 @@ render_template "$COMMAND_TEMPLATES_DIR/save.md.template" "$COMMAND_DIR/$command
 } > "$GENERATED_INDEX"
 
 MANAGED_BEGIN='<!-- stance:managed:begin -->'
-MANAGED_END='<!-- stance:managed:end -->'
 MANAGED_BLOCK='<!-- stance:managed:begin -->
 STANCE.md defines the working vocabulary and act-layer interpretation.
 CLAUDE.md describes the enforcement substrate and truth precedence.
@@ -334,8 +349,15 @@ trap 'rm -f "$TMP_CLAUDE"' EXIT
 
 if grep -q "$MANAGED_BEGIN" "$CLAUDE_FILE"; then
     awk -v block="$MANAGED_BLOCK" '
-        BEGIN { inside=0 }
-        index($0, "<!-- stance:managed:begin -->") { if (!inside) { print block; inside=1 } ; next }
+        BEGIN { inside=0; printed=0 }
+        index($0, "<!-- stance:managed:begin -->") {
+            if (!printed) {
+                print block
+                printed=1
+            }
+            inside=1
+            next
+        }
         index($0, "<!-- stance:managed:end -->") { inside=0; next }
         !inside { print }
     ' "$CLAUDE_FILE" > "$TMP_CLAUDE"
