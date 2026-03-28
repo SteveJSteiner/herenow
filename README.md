@@ -647,9 +647,10 @@ runs — `<new-past-commit>` must descend from the current past pin.
 ## Worktree provisioning
 
 `.now/src/provision-worktrees.sh` creates git worktrees at `wt/<branch>`
-for each branch declared in `.gitmodules`, plus `now`. It is idempotent and
-optional — enforcement works without worktrees. This is a convenience for
-operators who want each branch checked out simultaneously.
+for each branch declared in `.gitmodules` (and `now` when it isn’t the
+currently checked-out branch). It is idempotent and optional — enforcement
+works without worktrees. This is a convenience for operators who want all
+governed branches available simultaneously.
 
 Run it from the `now` branch after bootstrap:
 
