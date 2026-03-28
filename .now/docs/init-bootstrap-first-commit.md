@@ -9,8 +9,8 @@ Use this when starting from scaffold state and entering governed operation for t
 - `README.md` setup sections
 - `init.sh`
 - seeded `bootstrap.sh`
-- `.claude/commands/modify-enforcement-source.md`
-- `.claude/commands/now-commit.md`
+- `.now/docs/modify-enforcement-source.md`
+- `.now/docs/now-commit.md`
 
 ## Preconditions
 
