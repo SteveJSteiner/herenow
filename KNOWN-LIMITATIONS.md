@@ -27,6 +27,12 @@ Current constraints and boundaries of the Temporal Membrane template. These are 
 
 - All composition changes go through `now`. Concurrent operators must coordinate on this branch. Git merge mechanics apply, but the constraint-checking hooks may reject merges that are individually valid but jointly inconsistent.
 
+## Stance layer constraints
+
+- **Minimal TOML parser.** `install-stance.sh` parses `vocabulary.toml` with POSIX shell and awk. It handles double-quoted string values, inline comments, and section headers, but does not support multi-line strings, arrays, inline tables, or the full TOML spec. Vocabulary values must be double-quoted strings on single lines.
+- **Single vocabulary per repository.** The stance layer supports one vocabulary manifest (`stance/vocabulary.toml`) and one set of act-layer commands. There is no mechanism for multiple concurrent vocabularies or per-branch stance configurations.
+- **No automated stance upstream sync.** If stance templates change upstream, the operator must manually propagate the updated templates to `meta/stance/` and rerun `install-stance.sh`. Template changes are governed through `commit-to-meta.sh` but not automatically discovered.
+
 ## Open design decisions
 
 The following decisions were left intentionally open during the prototype phase. They do not block current operation but represent areas where the design may evolve:
@@ -41,6 +47,6 @@ The following decisions were left intentionally open during the prototype phase.
 
 ## Scope of test coverage
 
-- Test suites in `test/` (GT7, GT8a, GT8b, GT8c, GT12, GT13, GT15) plus dedicated immune-response and meta-consistency test harnesses in `.now/tests/`.
-- Tests exercise the init-to-governed path, constraint enforcement, immune response, worktree provisioning, and fresh-repo acceptance.
+- Test suites in `test/` (GT7, GT8a, GT8b, GT8c, GT12, GT13, GT15, GT16) plus dedicated immune-response and meta-consistency test harnesses in `.now/tests/`.
+- Tests exercise the init-to-governed path, constraint enforcement, immune response, worktree provisioning, fresh-repo acceptance, and stance installation (happy path, duplicate managed-block collapse, unexpected-file rejection, invalid index path rejection).
 - Tests do not cover: multi-remote scenarios, non-POSIX platforms, git versions below 2.38, concurrent operator workflows, or large-scale submodule configurations.
