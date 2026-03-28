@@ -73,13 +73,22 @@ step4_done() { check_membrane_branch meta; }
 step5_done() {
     _hooks=$(git ls-tree "refs/heads/now" -- .now/hooks/ 2>/dev/null) || return 1
     _src=$(git ls-tree "refs/heads/now" -- .now/src/ 2>/dev/null) || return 1
-    [ -n "$_hooks" ] && [ -n "$_src" ]
+    _docs=$(git ls-tree "refs/heads/now" -- .now/docs/ 2>/dev/null) || return 1
+    _install=$(git ls-tree "refs/heads/now" -- .claude/commands/install-stance.md 2>/dev/null) || return 1
+    _claude=$(git ls-tree "refs/heads/now" -- CLAUDE.md 2>/dev/null) || return 1
+    [ -n "$_hooks" ] && [ -n "$_src" ] && [ -n "$_docs" ] && [ -n "$_install" ] && [ -n "$_claude" ]
 }
 
 step6_done() {
-    _meta_tree=$(git rev-parse "refs/heads/meta^{tree}" 2>/dev/null) || return 1
-    _empty_tree=$(git mktree </dev/null)
-    [ "$_meta_tree" != "$_empty_tree" ]
+    git rev-parse --verify "refs/heads/meta:stance/vocabulary.toml" >/dev/null 2>&1 || return 1
+    git rev-parse --verify "refs/heads/meta:stance/STANCE.md.template" >/dev/null 2>&1 || return 1
+    git rev-parse --verify "refs/heads/meta:stance/commands/show.md.template" >/dev/null 2>&1 || return 1
+    git rev-parse --verify "refs/heads/meta:stance/commands/explore.md.template" >/dev/null 2>&1 || return 1
+    git rev-parse --verify "refs/heads/meta:stance/commands/integrate.md.template" >/dev/null 2>&1 || return 1
+    git rev-parse --verify "refs/heads/meta:stance/commands/finish.md.template" >/dev/null 2>&1 || return 1
+    git rev-parse --verify "refs/heads/meta:stance/commands/change-rules.md.template" >/dev/null 2>&1 || return 1
+    git rev-parse --verify "refs/heads/meta:stance/commands/save.md.template" >/dev/null 2>&1 || return 1
+    return 0
 }
 
 step7_done() {
@@ -157,7 +166,7 @@ if ! step5_done; then
     git ls-tree -r HEAD -- .now/hooks/ .now/src/ > "$TEMP_ENTRIES" 2>/dev/null || true
     if ! grep -q '\.now/hooks/' "$TEMP_ENTRIES" 2>/dev/null || \
        ! grep -q '\.now/src/'   "$TEMP_ENTRIES" 2>/dev/null; then
-        echo "Error: .now/hooks/ and .now/src/ not found in HEAD." >&2
+        echo "Error: required seed paths (.now/hooks and .now/src) not found in HEAD." >&2
         echo "  Run init.sh from the scaffold branch (main), not from now." >&2
         exit 1
     fi
@@ -169,6 +178,37 @@ if ! step5_done; then
         add_entry "$_mode" "$_sha" "$_path"
     done < "$TEMP_ENTRIES"
     rm -f "$TEMP_ENTRIES"
+
+    # Fixed /install-stance command doc (seeded from scaffold HEAD; single source of truth).
+    _blob=$(git show HEAD:.claude/commands/install-stance.md | blob)
+    add_entry 100644 "$_blob" ".claude/commands/install-stance.md"
+
+    # Root memory/runtime docs used by stance install.
+    _blob=$(git show HEAD:CLAUDE.md | blob)
+    add_entry 100644 "$_blob" "CLAUDE.md"
+
+    _blob=$(git show HEAD:INSTALL-STANCE.md | blob)
+    add_entry 100644 "$_blob" "INSTALL-STANCE.md"
+
+    # Non-command substrate/operator reference docs.
+    _blob=$(git show HEAD:.now/docs/membrane-status.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/membrane-status.md"
+    _blob=$(git show HEAD:.now/docs/init-bootstrap-first-commit.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/init-bootstrap-first-commit.md"
+    _blob=$(git show HEAD:.now/docs/now-commit.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/now-commit.md"
+    _blob=$(git show HEAD:.now/docs/modify-enforcement-source.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/modify-enforcement-source.md"
+    _blob=$(git show HEAD:.now/docs/create-past.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/create-past.md"
+    _blob=$(git show HEAD:.now/docs/create-future.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/create-future.md"
+    _blob=$(git show HEAD:.now/docs/advance-past.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/advance-past.md"
+    _blob=$(git show HEAD:.now/docs/graduate-future.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/graduate-future.md"
+    _blob=$(git show HEAD:.now/docs/commands-register.md | blob)
+    add_entry 100644 "$_blob" ".now/docs/commands-register.md"
 
     # bootstrap.sh
     _bootstrap_blob=$(blob <<'BOOTSTRAP'
@@ -327,6 +367,344 @@ README
         } | blob
     )
     add_entry 100644 "$_manifest_blob" "enforcement-manifest"
+
+    # Governed stance install source (post-init install layer).
+    _blob=$(blob <<'VOCAB'
+# Fill this manifest, then run /install-stance.
+# Quoted values only in this first implementation.
+
+[stance]
+title = ""
+description = ""
+floor = ""
+claim = ""
+experiment = ""
+blocked = ""
+
+[commands]
+show = ""
+explore = ""
+integrate = ""
+finish = ""
+change_rules = ""
+save = ""
+VOCAB
+)
+    add_entry 100644 "$_blob" "stance/vocabulary.toml"
+
+    _blob=$(blob <<'STANCE_TEMPLATE'
+# {{stance.title}}
+
+{{stance.description}}
+
+## Working language
+
+This overlay defines the operative language used by the act-layer commands installed in `.claude/commands/`.
+`CLAUDE.md` remains the root memory authority for enforcement substrate and truth precedence.
+
+## Noun semantics
+
+- **{{stance.floor}}** — the current grounded state (facts, constraints, pins, checker outcomes).
+- **{{stance.claim}}** — the current assertion about what should be done or is true.
+- **{{stance.experiment}}** — the next concrete trial intended to raise confidence or expose failure.
+- **{{stance.blocked}}** — explicit block conditions that prevent safe forward motion.
+
+Treat these four nouns as mutually distinct categories. If a case does not fit cleanly, classify it as `{{stance.blocked}}` until clarified.
+
+## Act mapping
+
+- `/{{commands.show}}` — classify current state into `{{stance.floor}}` / `{{stance.claim}}` / `{{stance.experiment}}` / `{{stance.blocked}}`.
+- `/{{commands.explore}}` — generate and compare candidate `{{stance.experiment}}` moves from the current `{{stance.floor}}`.
+- `/{{commands.integrate}}` — integrate validated content through normal git operations and governed commit on `now`.
+- `/{{commands.finish}}` — close a cycle with evidence and clear classification updates.
+- `/{{commands.change_rules}}` — modify governed artifacts on `meta`, then commit through the governed path.
+- `/{{commands.save}}` — persist concise continuation state in this vocabulary.
+
+## Blocking and enforcement surface
+
+When progress is blocked by governance or enforcement:
+
+1. classify as `{{stance.blocked}}`,
+2. identify the enforcing source (`.now/hooks/*`, `.now/src/*`, or checker output),
+3. route to either ordinary content repair (`now`) or governed rule change (`meta`).
+
+## Substrate mapping appendix
+
+- Constraint evaluator: `.now/src/check-composition.sh`
+- Meta consistency: `.now/src/check-meta-consistency.sh`
+- Governed helper for meta commits: `.now/src/commit-to-meta.sh`
+- Install machinery: `.now/src/install-stance.sh`
+STANCE_TEMPLATE
+)
+    add_entry 100644 "$_blob" "stance/STANCE.md.template"
+
+    _blob=$(blob <<'SHOW_TEMPLATE'
+---
+description: "Inspect where things stand — classify floor, claim, experiment, blocked"
+---
+<!-- generated-by: install-stance -->
+
+# `/{{commands.show}}`
+
+## When this command applies
+
+Use this to produce a grounded status classification before planning or committing work.
+
+## Truth sources
+
+- `STANCE.md`
+- `CLAUDE.md`
+- checker outputs under `.now/src/`
+
+## Preconditions
+
+- Run from repository root.
+- Prefer fresh checker output when state may have changed.
+
+## Steps
+
+1. Identify current `{{stance.floor}}` (facts and constraints).
+2. State current `{{stance.claim}}`.
+3. Propose current/next `{{stance.experiment}}`.
+4. Record `{{stance.blocked}}` if any blocking condition exists.
+
+## Verification
+
+- Every claim is tied to source, checker output, or a command result.
+- Any unresolved uncertainty is labeled `{{stance.blocked}}`.
+
+## Failure protocol
+
+- If classification is ambiguous, stop and gather evidence before proceeding.
+
+## Evidence to report
+
+- One concise four-part classification: floor / claim / experiment / blocked.
+SHOW_TEMPLATE
+)
+    add_entry 100644 "$_blob" "stance/commands/show.md.template"
+
+    _blob=$(blob <<'EXPLORE_TEMPLATE'
+---
+description: "Explore candidate moves and shape an experiment from current floor"
+---
+<!-- generated-by: install-stance -->
+
+# `/{{commands.explore}}`
+
+## When this command applies
+
+Use this when `{{stance.floor}}` is known and you need to choose the next `{{stance.experiment}}`.
+
+## Truth sources
+
+- `STANCE.md`
+- relevant checkers in `.now/src/`
+- current git state (`git status`, staged diff, refs)
+
+## Preconditions
+
+- Current `{{stance.floor}}` and `{{stance.claim}}` are explicit.
+
+## Steps
+
+1. Enumerate candidate experiments grounded in current constraints.
+2. For each candidate, describe mechanism-level execution.
+3. Choose one experiment and define success/failure signals.
+
+## Verification
+
+- Proposed experiment can be executed via explicit git operations or repository scripts.
+- Success/failure conditions are observable.
+
+## Failure protocol
+
+- If no safe experiment exists, classify as `{{stance.blocked}}` and route to `/{{commands.change_rules}}` or content repair.
+
+## Evidence to report
+
+- Chosen experiment, alternatives rejected, and reasons.
+EXPLORE_TEMPLATE
+)
+    add_entry 100644 "$_blob" "stance/commands/explore.md.template"
+
+    _blob=$(blob <<'INTEGRATE_TEMPLATE'
+---
+description: "Integrate validated work into now through governed commit flow"
+---
+<!-- generated-by: install-stance -->
+
+# `/{{commands.integrate}}`
+
+## When this command applies
+
+Use this after an experiment is accepted and ready to land on `now`.
+
+## Truth sources
+
+- `STANCE.md`
+- `.now/hooks/*`
+- `.now/src/check-composition.sh`
+
+## Preconditions
+
+- Changes are reviewed and staged intentionally.
+- Governance hooks are active (`core.hooksPath=.now/hooks`).
+
+## Steps
+
+1. Apply ordinary git content operations (edit/add/remove/stage).
+2. Run relevant checkers before commit.
+3. Commit on `now` through normal governed flow.
+
+`/{{commands.integrate}}` is advisory only; it does not call a dedicated integrate helper.
+
+## Verification
+
+- Commit is accepted by governance and not auto-reverted.
+
+## Failure protocol
+
+- If pre-commit checks fail or immune response reverts, classify as `{{stance.blocked}}` and report enforcing mechanism.
+
+## Evidence to report
+
+- Commit SHA, checker outputs, and any governance diagnostics.
+INTEGRATE_TEMPLATE
+)
+    add_entry 100644 "$_blob" "stance/commands/integrate.md.template"
+
+    _blob=$(blob <<'FINISH_TEMPLATE'
+---
+description: "Finish a cycle by recording evidence, verification, and state transition"
+---
+<!-- generated-by: install-stance -->
+
+# `/{{commands.finish}}`
+
+## When this command applies
+
+Use this to close the current cycle and hand off clearly.
+
+## Truth sources
+
+- current working tree/index/HEAD state
+- checker outputs
+- commit history from this cycle
+
+## Preconditions
+
+- The active experiment has reached a terminal state (accepted, rejected, or blocked).
+
+## Steps
+
+1. Summarize outcome against the initial `{{stance.claim}}`.
+2. Report resulting `{{stance.floor}}`.
+3. Record next `{{stance.experiment}}` or `{{stance.blocked}}`.
+
+## Verification
+
+- Outcome is traceable to concrete evidence.
+
+## Failure protocol
+
+- If evidence is incomplete, classify as `{{stance.blocked}}` and reopen exploration.
+
+## Evidence to report
+
+- Outcome summary, references to SHAs/checkers, and next-step classification.
+FINISH_TEMPLATE
+)
+    add_entry 100644 "$_blob" "stance/commands/finish.md.template"
+
+    _blob=$(blob <<'CHANGE_RULES_TEMPLATE'
+---
+description: "Change governed rules by editing meta artifacts and committing through meta"
+---
+<!-- generated-by: install-stance -->
+
+# `/{{commands.change_rules}}`
+
+## When this command applies
+
+Use this for governed changes to rule-shaping artifacts (templates, vocabulary schema, manifests).
+
+## Truth sources
+
+- `meta/*` governed source
+- `.now/src/commit-to-meta.sh`
+- `.now/src/check-meta-consistency.sh`
+
+## Preconditions
+
+- You can explain why this is a rule/governance change instead of ordinary content work.
+
+## Steps
+
+1. Edit declared governed files in `meta/`.
+2. Commit declared paths with `.now/src/commit-to-meta.sh`.
+3. Stage resulting gitlink on `now` (helper does this).
+4. Commit `now` side through governed flow.
+
+## Verification
+
+- Declared paths only were committed on `meta`.
+- `now` index includes updated `meta` gitlink.
+
+## Failure protocol
+
+- If helper reports undeclared dirty meta paths, clean or isolate them before retry.
+
+## Evidence to report
+
+- Meta SHA, now commit SHA, and declared path list.
+CHANGE_RULES_TEMPLATE
+)
+    add_entry 100644 "$_blob" "stance/commands/change-rules.md.template"
+
+    _blob=$(blob <<'SAVE_TEMPLATE'
+---
+description: "Save current stance state and summarize evidence for continuation"
+---
+<!-- generated-by: install-stance -->
+
+# `/{{commands.save}}`
+
+## When this command applies
+
+Use this before handoff or context switch.
+
+## Truth sources
+
+- latest accepted commit(s)
+- current checker status
+- current `STANCE.md` vocabulary
+
+## Preconditions
+
+- Current cycle state has been classified.
+
+## Steps
+
+1. Capture the current `{{stance.floor}}`.
+2. Capture the active `{{stance.claim}}`.
+3. Capture next `{{stance.experiment}}` or explicit `{{stance.blocked}}`.
+4. Record any must-run verification command for the next operator.
+
+## Verification
+
+- A new operator can resume without inferring missing mechanism.
+
+## Failure protocol
+
+- If context is incomplete, mark as `{{stance.blocked}}` and list missing evidence.
+
+## Evidence to report
+
+- Short continuation record with explicit floor/claim/experiment/blocked values.
+SAVE_TEMPLATE
+)
+    add_entry 100644 "$_blob" "stance/commands/save.md.template"
 
     _tree=$(write_temp_tree)
     _parent=$(git rev-parse refs/heads/meta)

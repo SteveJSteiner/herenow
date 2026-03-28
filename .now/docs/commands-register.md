@@ -1,6 +1,6 @@
-# Claude Code Commands — `herenow`
+# Commands Register Guidance
 
-This directory is the durable command layer for operators using Claude Code in this repo.
+This file governs command prose quality for both the fixed `/install-stance` command and installed act-layer commands.
 
 ## Register (mandatory)
 
@@ -12,17 +12,6 @@ This directory is the durable command layer for operators using Claude Code in t
 - If two phrasings are equally precise, choose the one that teaches mechanism rather than the one that sounds like compliance boilerplate.
 - If membrane vocabulary appears, bind it to files/scripts/checkers immediately.
 - Commands must teach mechanism while remaining executable as checklists.
-
-## Command index
-
-- [`/membrane-status`](./membrane-status.md)
-- [`/init-bootstrap-first-commit`](./init-bootstrap-first-commit.md)
-- [`/now-commit`](./now-commit.md)
-- [`/modify-enforcement-source`](./modify-enforcement-source.md)
-- [`/create-past`](./create-past.md)
-- [`/create-future`](./create-future.md)
-- [`/advance-past`](./advance-past.md)
-- [`/graduate-future`](./graduate-future.md)
 
 ## Shared command skeleton (mandatory)
 
