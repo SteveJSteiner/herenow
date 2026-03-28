@@ -107,6 +107,12 @@ if git show "$meta_tip:extra-manifested-files" > "$extra_list_tmp" 2>/dev/null; 
             ''|'#'*) continue ;;
         esac
         case "$line" in
+            *[[:space:]]*)
+                echo "Error: extra manifested paths must not contain whitespace: $line" >&2
+                exit 1
+                ;;
+        esac
+        case "$line" in
             /*)
                 echo "Error: unsafe extra manifested path (must be repo-relative): $line" >&2
                 exit 1
@@ -120,6 +126,10 @@ if git show "$meta_tip:extra-manifested-files" > "$extra_list_tmp" 2>/dev/null; 
         esac
 
         full="$repo_root/$line"
+        if [ -L "$full" ]; then
+            echo "Error: declared extra manifested file must not be a symlink: $line" >&2
+            exit 1
+        fi
         if [ ! -f "$full" ]; then
             echo "Error: declared extra manifested file missing: $line" >&2
             exit 1

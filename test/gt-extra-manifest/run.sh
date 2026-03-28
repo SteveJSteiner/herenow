@@ -49,8 +49,10 @@ git config commit.gpgsign false
 git add -A
 git commit -q -m "seed"
 
-sh ./init.sh >/dev/null
-sh ./bootstrap.sh >/dev/null
+init_log="$FIXTURE/init.log"
+sh ./init.sh >"$init_log" 2>&1 || { fail "init.sh failed"; cat "$init_log"; exit 1; }
+bootstrap_log="$FIXTURE/bootstrap.log"
+sh ./bootstrap.sh >"$bootstrap_log" 2>&1 || { fail "bootstrap.sh failed"; cat "$bootstrap_log"; exit 1; }
 
 manifest_on_meta() {
     meta_tip=$(git rev-parse refs/heads/meta)
@@ -232,6 +234,32 @@ else
     fail "update-manifest rejects unsafe absolute paths"
 fi
 assert_contains "unsafe absolute path error mentions rejected path" "$unsafe_abs_output" "/tmp/abs.txt"
+
+write_extra_manifest_file "bad path.txt"
+set +e
+unsafe_ws_output=$(sh .now/src/update-manifest.sh 2>&1)
+unsafe_ws_rc=$?
+set -e
+if [ "$unsafe_ws_rc" -ne 0 ]; then
+    pass "update-manifest rejects whitespace in paths"
+else
+    fail "update-manifest rejects whitespace in paths"
+fi
+assert_contains "unsafe whitespace path error mentions rejected path" "$unsafe_ws_output" "bad path.txt"
+
+printf 'symlink target\n' > linked-target.txt
+ln -sf linked-target.txt linked-file
+write_extra_manifest_file "linked-file"
+set +e
+unsafe_link_output=$(sh .now/src/update-manifest.sh 2>&1)
+unsafe_link_rc=$?
+set -e
+if [ "$unsafe_link_rc" -ne 0 ]; then
+    pass "update-manifest rejects symlink entries"
+else
+    fail "update-manifest rejects symlink entries"
+fi
+assert_contains "unsafe symlink error mentions rejected path" "$unsafe_link_output" "linked-file"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
