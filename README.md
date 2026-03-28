@@ -347,9 +347,10 @@ generated tier.
 appear in `.claude/commands/`, named according to `meta/stance/vocabulary.toml`.
 These are rendered from templates on meta (`stance/commands/*.md.template`) and
 tracked by `.claude/commands/.stance-generated`, which lists the generated file
-paths. The installer enforces that the only markdown command files in
-`.claude/commands/` are `install-stance.md` and the generated commands recorded
-in `.stance-generated`; other unexpected files are warned about.
+paths. The installer rejects unexpected markdown files in `.claude/commands/` —
+only `install-stance.md` and the generated commands recorded in
+`.stance-generated` are permitted. Unexpected non-markdown files produce a
+warning but do not block installation.
 
 The generated commands follow the same structural skeleton as the operator docs
 (when to apply, truth sources, preconditions, steps, verification, failure
@@ -645,10 +646,11 @@ runs — `<new-past-commit>` must descend from the current past pin.
 
 ## Worktree provisioning
 
-`.now/src/provision-worktrees.sh` creates git worktrees at `wt/<branch-name>`
-for each branch declared in `.gitmodules`, plus `now`. It is idempotent and
-optional — enforcement works without worktrees. This is a convenience for
-operators who want each branch checked out simultaneously.
+`.now/src/provision-worktrees.sh` creates git worktrees at `wt/<branch>`
+for each branch declared in `.gitmodules` (and `now` when it isn’t the
+currently checked-out branch). It is idempotent and optional — enforcement
+works without worktrees. This is a convenience for operators who want all
+governed branches available simultaneously.
 
 Run it from the `now` branch after bootstrap:
 
@@ -658,7 +660,7 @@ sh .now/src/provision-worktrees.sh
 
 It reads `.gitmodules` to discover branches, skips the currently checked-out
 branch (since the root already serves as its worktree), and calls `git worktree
-add wt/<n> <branch>` for each one. Missing branches are skipped with a
+add wt/<branch> <branch>` for each one. Missing branches are skipped with a
 notice.
 
 ---
